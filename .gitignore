@@ -1,0 +1,23 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# Plateformes générées par `flutter create` dans le CI
+android/
+ios/
+linux/
+macos/
+windows/
+web/
+
+# Polices téléchargées par le CI (licence SIL OFL)
+assets/fonts/*.ttf
+
+# IDE
+.idea/
+.vscode/
+*.iml

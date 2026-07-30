@@ -1,0 +1,355 @@
+import 'dart:async';
+import 'dart:ui' show Color;
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:just_audio/just_audio.dart';
+
+import '../core/api/quran_api.dart';
+import '../core/models/models.dart';
+import '../core/services/audio_service.dart';
+import '../core/services/font_service.dart';
+import '../core/services/video_generator.dart';
+import 'editor_state.dart';
+
+final quranApiProvider = Provider<QuranApi>((ref) => QuranApi());
+final audioServiceProvider = Provider<AudioService>((ref) => AudioService());
+
+final chaptersProvider = FutureProvider<List<Chapter>>(
+  (ref) => ref.watch(quranApiProvider).fetchChapters(),
+);
+
+final recitersProvider = FutureProvider<List<Reciter>>(
+  (ref) => ref.watch(quranApiProvider).fetchReciters(),
+);
+
+final editorProvider =
+    NotifierProvider<EditorController, EditorState>(EditorController.new);
+
+/// Points d'accroche verticaux du bloc de texte : haut, milieu, bas.
+const List<double> kSnapFractions = [0.18, 0.5, 0.82];
+
+class EditorController extends Notifier<EditorState> {
+  final AudioPlayer _player = AudioPlayer();
+  final VideoGenerator _generator = VideoGenerator();
+
+  Timer? _rangeDebounce;
+  int _versesToken = 0;
+  int _audioToken = 0;
+  int _playToken = 0;
+
+  final Map<String, List<Verse>> _verseCache = {};
+  final Map<String, Map<String, String>> _audioUrlCache = {};
+
+  @override
+  EditorState build() {
+    ref.onDispose(() {
+      _rangeDebounce?.cancel();
+      _player.dispose();
+    });
+    // Sélections par défaut dès que les métadonnées arrivent :
+    // Al-Fatiha + Mishary Alafasy (id 7).
+    ref.listen(chaptersProvider, (previous, next) {
+      next.whenData((chapters) {
+        Future.microtask(() {
+          if (state.chapter == null && chapters.isNotEmpty) {
+            selectChapter(chapters.first);
+          }
+        });
+      });
+    });
+    ref.listen(recitersProvider, (previous, next) {
+      next.whenData((reciters) {
+        Future.microtask(() {
+          if (state.reciter == null && reciters.isNotEmpty) {
+            final featured = reciters.where((r) => r.id == 7);
+            setReciter(featured.isNotEmpty ? featured.first : reciters.first);
+          }
+        });
+      });
+    });
+    return const EditorState();
+  }
+
+  // ─────────────────────────── Contenu ───────────────────────────
+
+  void setBackground(String path) {
+    state = state.copyWith(backgroundPath: path);
+  }
+
+  void selectChapter(Chapter chapter) {
+    stopPreview();
+    state = state.copyWith(
+      chapter: chapter,
+      ayahFrom: 1,
+      ayahTo: chapter.versesCount < 5 ? chapter.versesCount : 5,
+      verses: const [],
+      audios: const [],
+      previewIndex: 0,
+      generation: const GenerationState.idle(),
+      versesError: null,
+      audioError: null,
+    );
+    _reloadVerses();
+    _reloadAudio();
+  }
+
+  void setRange(int from, int to) {
+    final chapter = state.chapter;
+    if (chapter == null) return;
+    final safeFrom = from.clamp(1, chapter.versesCount);
+    final safeTo = to.clamp(safeFrom, chapter.versesCount);
+    if (safeFrom == state.ayahFrom && safeTo == state.ayahTo) return;
+    stopPreview();
+    // loadingAudio/loadingVerses passent à true immédiatement pour bloquer la
+    // génération pendant la fenêtre de debounce.
+    state = state.copyWith(
+      ayahFrom: safeFrom,
+      ayahTo: safeTo,
+      loadingVerses: true,
+      loadingAudio: true,
+      audios: const [],
+      previewIndex: 0,
+    );
+    _rangeDebounce?.cancel();
+    _rangeDebounce = Timer(const Duration(milliseconds: 500), () {
+      _reloadVerses();
+      _reloadAudio();
+    });
+  }
+
+  void reloadVerses() => _reloadVerses();
+  void reloadAudio() => _reloadAudio();
+
+  // ─────────────────────────── Récitateur ───────────────────────────
+
+  void setReciter(Reciter reciter) {
+    if (state.reciter?.id == reciter.id) return;
+    stopPreview();
+    state = state.copyWith(
+      reciter: reciter,
+      audios: const [],
+      audioError: null,
+    );
+    _reloadAudio();
+  }
+
+  // ─────────────────────────── Style ───────────────────────────
+
+  void setTextColor(Color color) {
+    state = state.copyWith(style: state.style.copyWith(textColor: color));
+  }
+
+  void setBoxOpacity(double opacity) {
+    state = state.copyWith(style: state.style.copyWith(boxOpacity: opacity));
+  }
+
+  void setSizeScale(double scale) {
+    state = state.copyWith(style: state.style.copyWith(sizeScale: scale));
+  }
+
+  void setFont(ArabicFont font) {
+    state = state.copyWith(style: state.style.copyWith(font: font));
+  }
+
+  void setTranslation(TranslationLang lang) {
+    if (lang == state.style.translation) return;
+    state = state.copyWith(style: state.style.copyWith(translation: lang));
+    _reloadVerses();
+  }
+
+  // ─────────────────────────── Position (drag & drop) ───────────────────────
+
+  void setYFraction(double fraction) {
+    state = state.copyWith(yFraction: fraction.clamp(0.08, 0.92));
+  }
+
+  /// Aimante la position sur Haut / Milieu / Bas si on en est proche.
+  void snapY() {
+    for (final snap in kSnapFractions) {
+      if ((state.yFraction - snap).abs() < 0.07) {
+        state = state.copyWith(yFraction: snap);
+        return;
+      }
+    }
+  }
+
+  // ─────────────────────────── Chargements ───────────────────────────
+
+  Future<void> _reloadVerses() async {
+    final chapter = state.chapter;
+    if (chapter == null) return;
+    final lang = state.style.translation;
+    final token = ++_versesToken;
+    state = state.copyWith(loadingVerses: true, versesError: null);
+    try {
+      final cacheKey = '${chapter.id}|${lang.name}';
+      var all = _verseCache[cacheKey];
+      all ??= await ref.read(quranApiProvider).fetchVerses(
+            chapterId: chapter.id,
+            translationId: lang.resourceId,
+          );
+      _verseCache[cacheKey] = all;
+      if (token != _versesToken) return;
+      final slice = all.sublist(state.ayahFrom - 1, state.ayahTo);
+      state = state.copyWith(
+        verses: slice,
+        loadingVerses: false,
+        previewIndex: 0,
+      );
+    } catch (e) {
+      if (token != _versesToken) return;
+      state = state.copyWith(
+        loadingVerses: false,
+        versesError: 'Versets indisponibles (connexion ?) — $e',
+      );
+    }
+  }
+
+  Future<void> _reloadAudio() async {
+    final chapter = state.chapter;
+    final reciter = state.reciter;
+    if (chapter == null || reciter == null) return;
+    stopPreview();
+    final token = ++_audioToken;
+    state = state.copyWith(
+      loadingAudio: true,
+      audioProgress: 0,
+      audioError: null,
+      audios: const [],
+    );
+    try {
+      final urlKey = '${reciter.id}|${chapter.id}';
+      var urls = _audioUrlCache[urlKey];
+      urls ??= await ref.read(quranApiProvider).fetchAudioUrls(
+            reciterId: reciter.id,
+            chapterId: chapter.id,
+          );
+      _audioUrlCache[urlKey] = urls;
+      if (token != _audioToken) return;
+
+      final service = ref.read(audioServiceProvider);
+      final from = state.ayahFrom;
+      final to = state.ayahTo;
+      final count = to - from + 1;
+      final result = <VerseAudio>[];
+      for (var n = from; n <= to; n++) {
+        final key = '${chapter.id}:$n';
+        final url = urls[key];
+        if (url == null) {
+          throw Exception('audio indisponible pour le verset $key '
+              'chez ce récitateur');
+        }
+        final path = await service.ensureVerseAudio(
+          reciterId: reciter.id,
+          verseKey: key,
+          url: url,
+        );
+        final durationMs = await service.probeDurationMs(path);
+        if (token != _audioToken) return;
+        result.add(VerseAudio(
+          verseKey: key,
+          localPath: path,
+          durationMs: durationMs,
+        ));
+        state = state.copyWith(audioProgress: result.length / count);
+      }
+      if (token != _audioToken) return;
+      state = state.copyWith(
+        audios: result,
+        loadingAudio: false,
+        audioProgress: 1,
+      );
+    } catch (e) {
+      if (token != _audioToken) return;
+      state = state.copyWith(
+        loadingAudio: false,
+        audioError: 'Audio indisponible — $e',
+      );
+    }
+  }
+
+  // ─────────────────────────── Aperçu audio ───────────────────────────
+
+  /// Joue les versets en séquence ; l'overlay suit le verset en cours, ce qui
+  /// donne un aperçu fidèle de la synchronisation du rendu final.
+  Future<void> togglePreview() async {
+    if (state.isPlaying) {
+      await stopPreview();
+      return;
+    }
+    if (!state.audioReady) return;
+    final audios = state.audios;
+    final token = ++_playToken;
+    state = state.copyWith(isPlaying: true, previewIndex: 0);
+    try {
+      for (var i = 0; i < audios.length; i++) {
+        if (token != _playToken) return;
+        state = state.copyWith(previewIndex: i);
+        await _player.setFilePath(audios[i].localPath);
+        if (token != _playToken) return;
+        unawaited(_player.play());
+        await _player.processingStateStream.firstWhere(
+          (s) => s == ProcessingState.completed || s == ProcessingState.idle,
+        );
+        if (token != _playToken) return;
+      }
+    } catch (_) {
+      // Lecture interrompue (changement de récitateur, stop…) : sans gravité.
+    } finally {
+      if (token == _playToken) {
+        state = state.copyWith(isPlaying: false, previewIndex: 0);
+        await _player.stop();
+      }
+    }
+  }
+
+  Future<void> stopPreview() async {
+    _playToken++;
+    if (state.isPlaying) {
+      state = state.copyWith(isPlaying: false, previewIndex: 0);
+    }
+    await _player.stop();
+  }
+
+  // ─────────────────────────── Génération ───────────────────────────
+
+  Future<void> generate() async {
+    final s = state;
+    if (s.generation.isBusy) return;
+    if (s.backgroundPath == null) {
+      _setGenerationError("Importe d'abord une vidéo d'arrière-plan.");
+      return;
+    }
+    if (!s.audioReady || s.loadingVerses) {
+      _setGenerationError("Le contenu ou l'audio n'est pas encore prêt.");
+      return;
+    }
+    await stopPreview();
+    try {
+      final fontsDir = await FontService().ensureFontsDir();
+      await _generator.generate(
+        backgroundPath: s.backgroundPath!,
+        verses: s.verses,
+        audios: s.audios,
+        style: s.style,
+        yFraction: s.yFraction,
+        fontsDir: fontsDir,
+        onState: (g) => state = state.copyWith(generation: g),
+      );
+    } catch (e) {
+      _setGenerationError('Échec de la génération : $e');
+    }
+  }
+
+  void cancelGeneration() => _generator.cancel();
+
+  void resetGeneration() {
+    state = state.copyWith(generation: const GenerationState.idle());
+  }
+
+  void _setGenerationError(String message) {
+    state = state.copyWith(
+      generation: GenerationState(GenerationPhase.error, message: message),
+    );
+  }
+}

@@ -1,0 +1,148 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+# Nécessaire pour publier les APK en Release (téléchargement direct mobile).
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Compile Flutter release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter (version épinglée pour un scaffold déterministe)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.35.4"
+          cache: true
+
+      # Les polices sont des binaires : elles ne vivent pas dans le repo,
+      # le CI les récupère depuis le dépôt Google Fonts (licence SIL OFL).
+      - name: Download Arabic fonts (Amiri, Scheherazade New — SIL OFL)
+        run: |
+          mkdir -p assets/fonts
+          curl -fsSL -o assets/fonts/Amiri-Regular.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Regular.ttf"
+          curl -fsSL -o assets/fonts/Amiri-Bold.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Bold.ttf"
+          curl -fsSL -o assets/fonts/ScheherazadeNew-Regular.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/scheherazadenew/ScheherazadeNew-Regular.ttf"
+          ls -lh assets/fonts
+
+      # Le repo ne contient que lib/ + pubspec : le dossier android/ (dont le
+      # gradle-wrapper.jar binaire) est régénéré ici. pubspec et lib sont
+      # sauvegardés puis restaurés au cas où flutter create les toucherait.
+      - name: Generate Android platform scaffold
+        run: |
+          cp pubspec.yaml /tmp/pubspec.yaml.bak
+          cp -r lib /tmp/lib.bak
+          flutter create . --platforms=android --project-name quran_video_studio --org dev.adamlahlou
+          cp /tmp/pubspec.yaml.bak pubspec.yaml
+          rm -rf lib
+          cp -r /tmp/lib.bak lib
+          rm -f test/widget_test.dart
+
+      # minSdk 24 requis par ffmpeg_kit_flutter_new ; manifeste réécrit pour
+      # ajouter INTERNET (release) + permissions stockage rétro-compatibles.
+      # La signature debug auto-générée par Gradle rend l'APK installable
+      # sur Android 13/14 ("sources inconnues").
+      - name: Patch Android project (minSdk 24, permissions, app label)
+        run: |
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' android/app/build.gradle.kts
+          fi
+          if [ -f android/app/build.gradle ]; then
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/' android/app/build.gradle
+          fi
+          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
+              <application
+                  android:label="Quran Video Studio"
+                  android:name="${applicationName}"
+                  android:icon="@mipmap/ic_launcher"
+                  android:requestLegacyExternalStorage="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:taskAffinity=""
+                      android:theme="@style/LaunchTheme"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                      android:hardwareAccelerated="true"
+                      android:windowSoftInputMode="adjustResize">
+                      <meta-data
+                          android:name="io.flutter.embedding.android.NormalTheme"
+                          android:resource="@style/NormalTheme"
+                          />
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+                  <meta-data
+                      android:name="flutterEmbedding"
+                      android:value="2" />
+              </application>
+              <queries>
+                  <intent>
+                      <action android:name="android.intent.action.PROCESS_TEXT"/>
+                      <data android:mimeType="text/plain"/>
+                  </intent>
+              </queries>
+          </manifest>
+          EOF
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      # --split-per-abi : APK par architecture (~4× plus légers que l'APK
+      # universel, FFmpeg embarquant des binaires natifs volumineux).
+      - name: Build release APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: List generated APKs
+        run: ls -lh build/app/outputs/flutter-apk/
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: quran-video-studio-apk-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/app-*-release.apk
+          retention-days: 7
+          if-no-files-found: error
+
+      # Release publique : APK téléchargeables directement depuis un téléphone
+      # (l'onglet Artifacts exige d'être connecté, pas les Releases).
+      - name: Publish GitHub Release with APKs
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v1.0.${{ github.run_number }}"
+          gh release create "$TAG" \
+            build/app/outputs/flutter-apk/app-*-release.apk \
+            --title "Quran Video Studio $TAG" \
+            --notes "APK générés automatiquement par GitHub Actions.
+
+          📱 **Sur un téléphone récent (2017+) : télécharger et installer \`app-arm64-v8a-release.apk\`.**
+          Autres fichiers : armeabi-v7a (vieux appareils), x86_64 (émulateurs)."

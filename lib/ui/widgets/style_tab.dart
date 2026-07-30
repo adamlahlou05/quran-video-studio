@@ -1,0 +1,128 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/models/models.dart';
+import '../../providers/editor_controller.dart';
+
+/// Onglet 3 — Style et typographie : tout est réactif, l'aperçu se met à jour
+/// instantanément (couleur, opacité du fond, traduction, police, taille).
+class StyleTab extends ConsumerWidget {
+  const StyleTab({super.key});
+
+  static const List<Color> _colors = [
+    Color(0xFFFFFFFF),
+    Color(0xFFFFD54F),
+    Color(0xFF80DEEA),
+    Color(0xFFA5D6A7),
+    Color(0xFF000000),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final style = ref.watch(editorProvider.select((s) => s.style));
+    final notifier = ref.read(editorProvider.notifier);
+    final scheme = Theme.of(context).colorScheme;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      children: [
+        const _SectionLabel('Couleur du texte'),
+        Row(
+          children: [
+            for (final color in _colors)
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: GestureDetector(
+                  onTap: () => notifier.setTextColor(color),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: style.textColor == color
+                            ? scheme.primary
+                            : Colors.white24,
+                        width: style.textColor == color ? 3 : 1,
+                      ),
+                    ),
+                    child: style.textColor == color
+                        ? Icon(
+                            Icons.check,
+                            size: 16,
+                            color: color.computeLuminance() > 0.5
+                                ? Colors.black
+                                : Colors.white,
+                          )
+                        : null,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const _SectionLabel('Opacité du fond derrière le texte'),
+        Slider(
+          value: style.boxOpacity,
+          min: 0,
+          max: 0.9,
+          divisions: 18,
+          label: '${(style.boxOpacity * 100).round()} %',
+          onChanged: notifier.setBoxOpacity,
+        ),
+        const _SectionLabel('Langue de la traduction'),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final lang in TranslationLang.values)
+              ChoiceChip(
+                label: Text(lang.label),
+                selected: style.translation == lang,
+                onSelected: (_) => notifier.setTranslation(lang),
+              ),
+          ],
+        ),
+        const _SectionLabel("Police d'écriture arabe"),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final font in ArabicFont.values)
+              ChoiceChip(
+                label: Text(
+                  font.label,
+                  style: TextStyle(fontFamily: font.flutterFamily),
+                ),
+                selected: style.font == font,
+                onSelected: (_) => notifier.setFont(font),
+              ),
+          ],
+        ),
+        const _SectionLabel('Taille du texte'),
+        Slider(
+          value: style.sizeScale,
+          min: 0.7,
+          max: 1.4,
+          divisions: 14,
+          label: '×${style.sizeScale.toStringAsFixed(1)}',
+          onChanged: notifier.setSizeScale,
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 8),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
