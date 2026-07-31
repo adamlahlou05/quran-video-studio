@@ -1,9 +1,13 @@
-# Quran Video Studio
+# NUQTA
 
 Application Android (Flutter) de génération de vidéos verticales **9:16** de
 récitation coranique : audio du récitateur, texte arabe (uthmani, avec
 harakat) et traduction **synchronisés verset par verset**, incrustés sur une
-vidéo d'arrière-plan choisie dans la galerie.
+ou plusieurs vidéos d'arrière-plan choisies dans la galerie.
+
+Identité visuelle : logo officiel `assets/branding/nuqta_logo.svg` (source de
+vérité) — la CI en dérive l'icône launcher, l'icône adaptative, le splash
+screen et le logo affiché dans l'app via `rsvg-convert`.
 
 Aucun environnement local n'est nécessaire : le dépôt est compilé par
 **GitHub Actions**, qui publie les APK dans les *Artifacts* de chaque build.
@@ -42,20 +46,19 @@ Aucun environnement local n'est nécessaire : le dépôt est compilé par
    description de partage prête à coller (récitateur — sourate — versets +
    hashtags configurables).
 
-### Partage et import
+### Partage et exports
 
 - **Partage** : feuille de partage Android (TikTok/Instagram/YouTube y
-  figurent) + bouton « Copier la description ». La publication automatique
-  TikTok n'est volontairement pas implémentée : l'API officielle Content
-  Posting exige un compte développeur TikTok, OAuth et un audit de l'app
-  (sans audit : publications privées uniquement) — hors de portée d'un APK
-  hors store, et tout contournement serait fragile.
-- **Import par lien** (onglet Contenu → ⛓) : liens TikTok / YouTube /
-  Instagram **détectés et expliqués** (pas d'API officielle de téléchargement
-  de vidéos tierces — aucun scraping ni contournement) ; les **liens directs
-  vers un fichier vidéo** (contenus personnels, banques libres de droits)
-  sont téléchargés avec progression, validés par FFprobe, copiés dans la
-  galerie et ajoutés à la séquence de fonds.
+  figurent) + bouton « Copier la description » (récitateur — sourate —
+  versets + hashtags configurables + hashtag du récitateur généré
+  automatiquement). La publication automatique TikTok n'est volontairement
+  pas implémentée : l'API officielle Content Posting exige un compte
+  développeur TikTok, OAuth et un audit de l'app.
+- **Signature** : filigrane optionnel (ex. `@toncompte`) peint par le même
+  moteur en aperçu, vidéo et image — persisté.
+- **Image-citation** : export PNG 1080×1920 d'un verset (fond dégradé au
+  choix, style et signature courants), enregistré dans l'album NUQTA.
+- **Récitateurs favoris** : épinglés en tête de liste (étoile), persistés.
 
 **Règles de durée** : l'audio de la récitation est la source de vérité.
 Vidéo plus longue → coupée à la fin de la récitation ; plus courte → bouclée

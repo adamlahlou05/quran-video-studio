@@ -23,12 +23,20 @@ class _ReciterTabState extends ConsumerState<ReciterTab> {
   @override
   Widget build(BuildContext context) {
     final all = ref.watch(recitersProvider);
-    final list = [
+    final editor = ref.watch(editorProvider);
+    final notifier = ref.read(editorProvider.notifier);
+    final favorites = editor.favoriteReciters;
+    // Favoris épinglés en tête (dans l'ordre du catalogue), puis les autres.
+    final filtered = [
       for (final reciter in all)
         if (reciterMatches(reciter, _query)) reciter,
     ];
-    final editor = ref.watch(editorProvider);
-    final notifier = ref.read(editorProvider.notifier);
+    final list = [
+      for (final r in filtered)
+        if (favorites.contains(r.id)) r,
+      for (final r in filtered)
+        if (!favorites.contains(r.id)) r,
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,6 +79,7 @@ class _ReciterTabState extends ConsumerState<ReciterTab> {
                   itemBuilder: (context, index) {
                     final reciter = list[index];
                     final selected = editor.reciter?.id == reciter.id;
+                    final isFavorite = favorites.contains(reciter.id);
                     final scheme = Theme.of(context).colorScheme;
                     return InkWell(
                       borderRadius: BorderRadius.circular(16),
@@ -91,7 +100,32 @@ class _ReciterTabState extends ConsumerState<ReciterTab> {
                             width: 2,
                           ),
                         ),
-                        child: Column(
+                        child: Stack(
+                          fit: StackFit.expand,
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned(
+                              top: -6,
+                              right: -6,
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () => notifier
+                                    .toggleFavoriteReciter(reciter.id),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(
+                                    isFavorite
+                                        ? Icons.star_rounded
+                                        : Icons.star_outline_rounded,
+                                    size: 18,
+                                    color: isFavorite
+                                        ? Colors.amber
+                                        : Colors.white38,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Column(
                           children: [
                             CircleAvatar(
                               radius: 19,
@@ -127,6 +161,8 @@ class _ReciterTabState extends ConsumerState<ReciterTab> {
                                 color: Colors.white70,
                               ),
                             ),
+                          ],
+                        ),
                           ],
                         ),
                       ),

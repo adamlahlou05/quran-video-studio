@@ -38,6 +38,7 @@ class OverlayRenderer {
     required List<VerseAudio> audios,
     required StyleSettings style,
     required double yFraction,
+    String signature = '',
     required String outputDir,
     required void Function(int done, int total) onProgress,
   }) async {
@@ -56,6 +57,7 @@ class OverlayRenderer {
         verse: verses[i],
         style: style,
         yFraction: yFraction,
+        signature: signature,
       );
       final picture = recorder.endRecording();
       final image = await picture.toImage(

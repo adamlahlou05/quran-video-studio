@@ -103,17 +103,6 @@ class _VideoCanvasState extends ConsumerState<VideoCanvas> {
     _syncVideo(clips[_clipIndex].path, loop: clips.length <= 1);
   }
 
-  Future<void> _pickVideos() async {
-    final rejected =
-        await ref.read(editorProvider.notifier).pickAndAddClips();
-    if (rejected > 0 && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:
-            Text('$rejected fichier(s) ignoré(s) : pas des vidéos lisibles.'),
-      ));
-    }
-  }
-
   @override
   void dispose() {
     _video?.dispose();
@@ -158,7 +147,7 @@ class _VideoCanvasState extends ConsumerState<VideoCanvas> {
                     ),
                   )
                 else
-                  _Placeholder(onPick: _pickVideos),
+                  const _Placeholder(),
 
                 // Guides d'aimantation pendant le drag.
                 if (_dragging)
@@ -223,17 +212,6 @@ class _VideoCanvasState extends ConsumerState<VideoCanvas> {
                     ],
                   ),
                 ),
-
-                if (editor.clips.isNotEmpty)
-                  Positioned(
-                    right: 6,
-                    top: 6,
-                    child: IconButton.filledTonal(
-                      tooltip: 'Ajouter des vidéos de fond',
-                      onPressed: _pickVideos,
-                      icon: const Icon(Icons.video_library_outlined, size: 20),
-                    ),
-                  ),
 
                 // Lecture / pause de l'aperçu synchronisé.
                 Positioned(
@@ -311,9 +289,10 @@ class _Chip extends StatelessWidget {
   }
 }
 
+/// Écran d'accueil du canvas : identité NUQTA + rappel du parcours d'import
+/// (l'ajout de vidéos se fait uniquement via Contenu → Vidéos d'arrière-plan).
 class _Placeholder extends StatelessWidget {
-  final VoidCallback onPick;
-  const _Placeholder({required this.onPick});
+  const _Placeholder();
 
   @override
   Widget build(BuildContext context) {
@@ -328,21 +307,33 @@ class _Placeholder extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.movie_outlined, size: 56, color: Colors.white38),
+          Image.asset(
+            'assets/branding/nuqta_logo.png',
+            width: 88,
+            height: 88,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (_, __, ___) => const Icon(Icons.movie_outlined,
+                size: 56, color: Colors.white38),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'NUQTA',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 6,
+              color: Colors.white,
+            ),
+          ),
           const SizedBox(height: 12),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 24),
             child: Text(
-              'Importe une ou plusieurs vidéos\nverticales (9:16) depuis ta galerie',
+              'Ajoute une ou plusieurs vidéos de fond :\n'
+              'Contenu → Vidéos d’arrière-plan → Ajouter',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(color: Colors.white70, fontSize: 12.5),
             ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: onPick,
-            icon: const Icon(Icons.add_photo_alternate_outlined),
-            label: const Text('Importer des vidéos'),
           ),
         ],
       ),

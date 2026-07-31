@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' show Color;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -10,6 +11,7 @@ import '../core/data/reciter_catalog.dart';
 import '../core/models/models.dart';
 import '../core/services/audio_service.dart';
 import '../core/services/export_naming.dart';
+import '../core/services/image_quote_renderer.dart';
 import '../core/services/media_probe.dart';
 import '../core/services/settings_service.dart';
 import '../core/services/video_generator.dart';
@@ -56,10 +58,16 @@ class EditorController extends Notifier<EditorState> {
         setReciter(kReciters.first);
       }
     });
-    _settings.loadHashtags().then((tags) {
-      if (tags != state.hashtags) {
-        state = state.copyWith(hashtags: tags);
-      }
+    Future.wait([
+      _settings.loadHashtags(),
+      _settings.loadSignature(),
+      _settings.loadFavoriteReciters(),
+    ]).then((values) {
+      state = state.copyWith(
+        hashtags: values[0] as String,
+        signature: values[1] as String,
+        favoriteReciters: values[2] as List<String>,
+      );
     });
     ref.listen(chaptersProvider, (previous, next) {
       next.whenData((chapters) {
@@ -131,6 +139,49 @@ class EditorController extends Notifier<EditorState> {
   void setHashtags(String value) {
     state = state.copyWith(hashtags: value);
     unawaited(_settings.saveHashtags(value));
+  }
+
+  void setSignature(String value) {
+    state = state.copyWith(signature: value);
+    unawaited(_settings.saveSignature(value));
+  }
+
+  void toggleFavoriteReciter(String reciterId) {
+    final favorites = [...state.favoriteReciters];
+    if (!favorites.remove(reciterId)) {
+      favorites.add(reciterId);
+    }
+    state = state.copyWith(favoriteReciters: favorites);
+    unawaited(_settings.saveFavoriteReciters(favorites));
+  }
+
+  /// Exporte une image-citation PNG du verset [verseIndex] (index dans la
+  /// plage chargée) vers la galerie ; renvoie le nom du fichier créé.
+  Future<String> exportQuoteImage({
+    required int verseIndex,
+    required QuoteBackground background,
+  }) async {
+    final s = state;
+    final verse = s.verses[verseIndex];
+    final bytes = await ImageQuoteRenderer.render(
+      verse: verse,
+      style: s.style,
+      yFraction: s.yFraction,
+      background: background,
+      signature: s.signature,
+    );
+    final number = await _settings.nextImageNumber();
+    final baseName = buildImageFileName(
+      number: number,
+      reciter: s.reciter!,
+      chapter: s.chapter!,
+      verseNumber: verse.number,
+    );
+    if (!await Gal.hasAccess(toAlbum: true)) {
+      await Gal.requestAccess(toAlbum: true);
+    }
+    await Gal.putImageBytes(bytes, album: 'NUQTA', name: baseName);
+    return '$baseName.png';
   }
 
   void setQuality(ExportQuality quality) {
@@ -399,6 +450,7 @@ class EditorController extends Notifier<EditorState> {
         transition: s.transition,
         quality: s.quality,
         yFraction: s.yFraction,
+        signature: s.signature,
         onState: (g) => state = state.copyWith(generation: g),
       );
     } catch (e) {

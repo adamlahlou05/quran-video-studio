@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1024" height="1024">
+  <!-- Variante technique du logo officiel NUQTA (nuqta_logo.svg) pour la
+       couche "foreground" de l'icône adaptative Android : mêmes formes et
+       mêmes couleurs, sans le fond ni l'ombre portée (le fond est fourni par
+       la couche "background" de l'icône). Ne pas modifier l'identité. -->
+  <defs>
+    <linearGradient id="royalGoldFull" x1="10%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#FDE08B" />
+      <stop offset="50%" stop-color="#D4AF37" />
+      <stop offset="100%" stop-color="#997300" />
+    </linearGradient>
+  </defs>
+  <g transform="scale(4.7407)">
+    <g>
+      <rect x="32" y="32" width="44" height="44" rx="4" fill="none" stroke="url(#royalGoldFull)" stroke-width="3.5" />
+      <rect x="32" y="32" width="44" height="44" rx="4" fill="none" stroke="url(#royalGoldFull)" stroke-width="3.5" transform="rotate(45 54 54)" />
+    </g>
+    <path d="M 54 41 L 67 54 L 54 67 L 41 54 Z"
+          fill="url(#royalGoldFull)"
+          stroke="url(#royalGoldFull)"
+          stroke-width="2"
+          stroke-linejoin="round" />
+  </g>
+</svg>

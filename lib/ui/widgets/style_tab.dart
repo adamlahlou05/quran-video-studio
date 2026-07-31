@@ -5,10 +5,16 @@ import '../../core/models/models.dart';
 import '../../providers/editor_controller.dart';
 
 /// Onglet 3 — Style et typographie : tout est réactif, l'aperçu se met à jour
-/// instantanément (couleur, opacité du fond, traduction, police, taille).
-class StyleTab extends ConsumerWidget {
+/// instantanément (couleur, opacité du fond, traduction, police, taille,
+/// signature). L'aperçu et l'export passent par le même peintre.
+class StyleTab extends ConsumerStatefulWidget {
   const StyleTab({super.key});
 
+  @override
+  ConsumerState<StyleTab> createState() => _StyleTabState();
+}
+
+class _StyleTabState extends ConsumerState<StyleTab> {
   static const List<Color> _colors = [
     Color(0xFFFFFFFF),
     Color(0xFFFFD54F),
@@ -17,11 +23,29 @@ class StyleTab extends ConsumerWidget {
     Color(0xFF000000),
   ];
 
+  TextEditingController? _signatureController;
+  final FocusNode _signatureFocus = FocusNode();
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void dispose() {
+    _signatureController?.dispose();
+    _signatureFocus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final style = ref.watch(editorProvider.select((s) => s.style));
+    final signature = ref.watch(editorProvider.select((s) => s.signature));
     final notifier = ref.read(editorProvider.notifier);
     final scheme = Theme.of(context).colorScheme;
+
+    _signatureController ??= TextEditingController(text: signature);
+    ref.listen(editorProvider.select((s) => s.signature), (_, next) {
+      if (!_signatureFocus.hasFocus && _signatureController!.text != next) {
+        _signatureController!.text = next;
+      }
+    });
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -106,6 +130,20 @@ class StyleTab extends ConsumerWidget {
           label: '×${style.sizeScale.toStringAsFixed(1)}',
           onChanged: notifier.setSizeScale,
         ),
+        const _SectionLabel('Signature (filigrane en haut de la vidéo)'),
+        TextField(
+          controller: _signatureController,
+          focusNode: _signatureFocus,
+          onChanged: notifier.setSignature,
+          style: const TextStyle(fontSize: 13),
+          decoration: const InputDecoration(
+            isDense: true,
+            hintText: '@toncompte (laisser vide pour désactiver)',
+            hintStyle: TextStyle(fontSize: 12),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 8),
       ],
     );
   }

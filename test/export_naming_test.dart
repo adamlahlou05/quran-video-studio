@@ -86,7 +86,7 @@ void main() {
   });
 
   group('buildShareDescription', () {
-    test('réciteur — sourate — versets + hashtags', () {
+    test('réciteur — sourate — versets + hashtags + tag récitateur auto', () {
       final text = buildShareDescription(
         reciter: _alafasy,
         chapter: _fatiha,
@@ -96,10 +96,10 @@ void main() {
       );
       expect(text,
           'Mishary Rashid Alafasy — Sourate Al-Fatihah — Versets 1 à 7'
-          '\n\n#Quran #Islam');
+          '\n\n#Quran #Islam #MisharyRashidAlafasy');
     });
 
-    test('verset unique, hashtags vides → pas de bloc hashtags', () {
+    test('verset unique, hashtags vides → seul le tag récitateur reste', () {
       final text = buildShareDescription(
         reciter: _alafasy,
         chapter: _fatiha,
@@ -108,7 +108,33 @@ void main() {
         hashtags: '   ',
       );
       expect(text, contains('Verset 3'));
-      expect(text, isNot(contains('\n\n')));
+      expect(text, endsWith('\n\n#MisharyRashidAlafasy'));
+    });
+
+    test('tag récitateur non dupliqué s’il est déjà présent', () {
+      final text = buildShareDescription(
+        reciter: _alafasy,
+        chapter: _fatiha,
+        ayahFrom: 1,
+        ayahTo: 2,
+        hashtags: '#Quran #MisharyRashidAlafasy',
+      );
+      expect(
+          RegExp('MisharyRashidAlafasy').allMatches(text).length, 1);
+    });
+  });
+
+  group('buildImageFileName', () {
+    test('base sans extension, même convention que les vidéos', () {
+      expect(
+        buildImageFileName(
+          number: 3,
+          reciter: _alafasy,
+          chapter: _fatiha,
+          verseNumber: 5,
+        ),
+        '003_Mishary-Rashid-Alafasy_Al-Fatihah_v5',
+      );
     });
   });
 }

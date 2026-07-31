@@ -1,7 +1,8 @@
 import '../models/models.dart';
 
 /// Hashtags proposés par défaut sous la description de partage.
-const String kDefaultHashtags = '#Quran #QuranRecitation #Islam #Coran';
+const String kDefaultHashtags =
+    '#Quran #QuranRecitation #Islam #Coran #Tilawa #QuranVideo';
 
 /// Nom de fichier lisible et sûr pour tous les systèmes (MediaStore, galerie,
 /// Google Photos, partage, explorateurs) : ASCII, ni espace ni caractère
@@ -19,7 +20,9 @@ String buildVideoFileName({
       '_$verses.mp4';
 }
 
-/// Description prête à coller sur TikTok/Instagram/YouTube.
+/// Description prête à coller sur TikTok/Instagram/YouTube. Un hashtag
+/// dérivé du nom du récitateur est ajouté automatiquement s'il n'est pas
+/// déjà présent dans les hashtags de l'utilisateur.
 String buildShareDescription({
   required Reciter reciter,
   required Chapter chapter,
@@ -32,11 +35,29 @@ String buildShareDescription({
       : 'Versets $ayahFrom à $ayahTo';
   final buffer = StringBuffer(
       '${reciter.displayName} — Sourate ${chapter.nameSimple} — $verses');
-  final tags = hashtags.trim();
+  var tags = hashtags.trim();
+  final reciterTag = slugify(reciter.name).replaceAll('-', '');
+  if (reciterTag != 'Video' &&
+      !tags.toLowerCase().contains(reciterTag.toLowerCase())) {
+    tags = tags.isEmpty ? '#$reciterTag' : '$tags #$reciterTag';
+  }
   if (tags.isNotEmpty) {
     buffer.write('\n\n$tags');
   }
   return buffer.toString();
+}
+
+/// Nom de base (sans extension) d'une image-citation,
+/// ex. : 001_Mishary-Rashid-Alafasy_Al-Fatihah_v3
+String buildImageFileName({
+  required int number,
+  required Reciter reciter,
+  required Chapter chapter,
+  required int verseNumber,
+}) {
+  final index = number.toString().padLeft(3, '0');
+  return '${index}_${slugify(reciter.name)}_${slugify(chapter.nameSimple)}'
+      '_v$verseNumber';
 }
 
 /// Normalise un libellé en segment de nom de fichier : accents aplatis,

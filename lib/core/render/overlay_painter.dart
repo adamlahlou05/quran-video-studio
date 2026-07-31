@@ -28,6 +28,9 @@ class OverlayFramePainter {
   static const double gap = 12;
   static const double radius = 24;
 
+  /// Taille de la signature/filigrane (repère 1080×1920).
+  static const double signatureSize = 30;
+
   /// Peint la frame complète (fond transparent) sur [canvas], dans le repère
   /// 1080×1920. Renvoie le rectangle du bloc dessiné (repère 1080×1920),
   /// utilisé par l'aperçu pour le drag & drop.
@@ -36,7 +39,9 @@ class OverlayFramePainter {
     required Verse? verse,
     required StyleSettings style,
     required double yFraction,
+    String signature = '',
   }) {
+    _paintSignature(canvas, signature);
     if (verse == null) {
       return _paintHint(canvas, yFraction);
     }
@@ -110,6 +115,30 @@ class OverlayFramePainter {
       ),
     );
     return rect;
+  }
+
+  /// Signature/filigrane en haut de la frame, même rendu en aperçu et à
+  /// l'export. Ombre systématique pour rester lisible sur tout fond.
+  static void _paintSignature(ui.Canvas canvas, String signature) {
+    final text = signature.trim();
+    if (text.isEmpty) return;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          fontSize: signatureSize,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.2,
+          color: Color(0xEBFFFFFF),
+          shadows: [Shadow(blurRadius: 6, color: Colors.black87)],
+        ),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: contentWidth);
+    painter.paint(canvas, Offset(frameW / 2 - painter.width / 2, 44));
   }
 
   /// Message d'aide affiché tant qu'aucun verset n'est chargé (aperçu

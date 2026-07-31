@@ -77,7 +77,7 @@ jobs:
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
               <application
-                  android:label="Quran Video Studio"
+                  android:label="NUQTA"
                   android:name="${applicationName}"
                   android:icon="@mipmap/ic_launcher"
                   android:requestLegacyExternalStorage="true">
@@ -112,6 +112,46 @@ jobs:
           </manifest>
           EOF
 
+      # Toutes les ressources visuelles sont dérivées du SVG officiel
+      # (assets/branding/nuqta_logo.svg) : icône launcher (5 densités),
+      # icône adaptative Android 8+ (fond nuit + rosace dorée), splash
+      # screen, et logo affiché dans l'application.
+      - name: Generate NUQTA branding (icons, splash, in-app logo)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq librsvg2-bin
+          rsvg-convert -w 512 -h 512 assets/branding/nuqta_logo.svg -o assets/branding/nuqta_logo.png
+          for e in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            d="${e%%:*}"; s="${e##*:}"
+            mkdir -p "android/app/src/main/res/mipmap-$d"
+            rsvg-convert -w "$s" -h "$s" assets/branding/nuqta_logo.svg -o "android/app/src/main/res/mipmap-$d/ic_launcher.png"
+          done
+          for e in mdpi:108 hdpi:162 xhdpi:216 xxhdpi:324 xxxhdpi:432; do
+            d="${e%%:*}"; s="${e##*:}"
+            rsvg-convert -w "$s" -h "$s" assets/branding/nuqta_foreground.svg -o "android/app/src/main/res/mipmap-$d/ic_launcher_foreground.png"
+          done
+          mkdir -p android/app/src/main/res/mipmap-anydpi-v26 android/app/src/main/res/values android/app/src/main/res/drawable-nodpi
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/nuqta_icon_bg"/>
+              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          EOF
+          cat > android/app/src/main/res/values/nuqta_colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources><color name="nuqta_icon_bg">#020617</color></resources>
+          EOF
+          rsvg-convert -w 384 -h 384 assets/branding/nuqta_logo.svg -o android/app/src/main/res/drawable-nodpi/splash_logo.png
+          cat > android/app/src/main/res/drawable/launch_background.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="@color/nuqta_icon_bg"/>
+              <item><bitmap android:gravity="center" android:src="@drawable/splash_logo"/></item>
+          </layer-list>
+          EOF
+          ls -R android/app/src/main/res/mipmap-anydpi-v26 android/app/src/main/res/drawable-nodpi assets/branding
+
       - name: Resolve dependencies
         run: flutter pub get
 
@@ -137,15 +177,15 @@ jobs:
           cd build/app/outputs/flutter-apk
           for f in app-*-release.apk; do
             abi="${f#app-}"; abi="${abi%-release.apk}"
-            mv "$f" "QuranVideoStudio-v${{ steps.appver.outputs.version }}-${abi}.apk"
+            mv "$f" "NUQTA-v${{ steps.appver.outputs.version }}-${abi}.apk"
           done
           ls -lh
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: quran-video-studio-apk-${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/QuranVideoStudio-v*.apk
+          name: nuqta-apk-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/NUQTA-v*.apk
           retention-days: 7
           if-no-files-found: error
 
@@ -158,9 +198,9 @@ jobs:
         run: |
           TAG="v${{ steps.appver.outputs.version }}-build${{ github.run_number }}"
           gh release create "$TAG" \
-            build/app/outputs/flutter-apk/QuranVideoStudio-v*.apk \
-            --title "Quran Video Studio v${{ steps.appver.outputs.version }} (build ${{ github.run_number }})" \
+            build/app/outputs/flutter-apk/NUQTA-v*.apk \
+            --title "NUQTA v${{ steps.appver.outputs.version }} (build ${{ github.run_number }})" \
             --notes "APK générés automatiquement par GitHub Actions.
 
-          📱 **Sur un téléphone récent (2017+) : télécharger et installer \`QuranVideoStudio-v${{ steps.appver.outputs.version }}-arm64-v8a.apk\`.**
+          📱 **Sur un téléphone récent (2017+) : télécharger et installer \`NUQTA-v${{ steps.appver.outputs.version }}-arm64-v8a.apk\`.**
           Autres fichiers : armeabi-v7a (vieux appareils), x86_64 (émulateurs)."

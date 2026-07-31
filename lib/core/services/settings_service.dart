@@ -49,6 +49,15 @@ class SettingsService {
     return next;
   }
 
+  /// Prochain numéro d'image-citation (compteur distinct des vidéos).
+  Future<int> nextImageNumber() async {
+    final data = await _load();
+    final next = (data['imageCounter'] as int? ?? 0) + 1;
+    data['imageCounter'] = next;
+    await _save();
+    return next;
+  }
+
   Future<String> loadHashtags() async {
     final data = await _load();
     return data['hashtags'] as String? ?? kDefaultHashtags;
@@ -57,6 +66,30 @@ class SettingsService {
   Future<void> saveHashtags(String value) async {
     final data = await _load();
     data['hashtags'] = value;
+    await _save();
+  }
+
+  Future<String> loadSignature() async {
+    final data = await _load();
+    return data['signature'] as String? ?? '';
+  }
+
+  Future<void> saveSignature(String value) async {
+    final data = await _load();
+    data['signature'] = value;
+    await _save();
+  }
+
+  Future<List<String>> loadFavoriteReciters() async {
+    final data = await _load();
+    final raw = data['favoriteReciters'];
+    if (raw is List) return raw.whereType<String>().toList();
+    return const [];
+  }
+
+  Future<void> saveFavoriteReciters(List<String> ids) async {
+    final data = await _load();
+    data['favoriteReciters'] = ids;
     await _save();
   }
 }

@@ -16,7 +16,7 @@ class QuranVideoStudioApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Quran Video Studio',
+      title: 'NUQTA',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

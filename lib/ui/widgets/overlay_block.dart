@@ -22,13 +22,15 @@ class OverlayPreview extends ConsumerWidget {
     final index = ref.watch(editorProvider.select((s) => s.previewIndex));
     final style = ref.watch(editorProvider.select((s) => s.style));
     final yFraction = ref.watch(editorProvider.select((s) => s.yFraction));
+    final signature = ref.watch(editorProvider.select((s) => s.signature));
     final verse =
         verses.isEmpty ? null : verses[index.clamp(0, verses.length - 1)];
 
     return RepaintBoundary(
       child: CustomPaint(
         size: Size.infinite,
-        painter: _OverlayPreviewPainter(verse, style, yFraction, blockRect),
+        painter: _OverlayPreviewPainter(
+            verse, style, yFraction, signature, blockRect),
       ),
     );
   }
@@ -38,10 +40,11 @@ class _OverlayPreviewPainter extends CustomPainter {
   final Verse? verse;
   final StyleSettings style;
   final double yFraction;
+  final String signature;
   final ValueNotifier<Rect?> blockRect;
 
   _OverlayPreviewPainter(this.verse, this.style, this.yFraction,
-      this.blockRect);
+      this.signature, this.blockRect);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -53,6 +56,7 @@ class _OverlayPreviewPainter extends CustomPainter {
       verse: verse,
       style: style,
       yFraction: yFraction,
+      signature: signature,
     );
     canvas.restore();
     blockRect.value = Rect.fromLTWH(
@@ -67,5 +71,6 @@ class _OverlayPreviewPainter extends CustomPainter {
   bool shouldRepaint(_OverlayPreviewPainter oldDelegate) =>
       oldDelegate.verse != verse ||
       oldDelegate.style != style ||
-      oldDelegate.yFraction != yFraction;
+      oldDelegate.yFraction != yFraction ||
+      oldDelegate.signature != signature;
 }

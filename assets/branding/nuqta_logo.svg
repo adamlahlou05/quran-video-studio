@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1024" height="1024">
+  <defs>
+    <radialGradient id="deepNightFull" cx="50%" cy="50%" r="75%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#020617" />
+    </radialGradient>
+
+    <linearGradient id="royalGoldFull" x1="10%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#FDE08B" />
+      <stop offset="50%" stop-color="#D4AF37" />
+      <stop offset="100%" stop-color="#997300" />
+    </linearGradient>
+
+    <filter id="floatShadowFull" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Masque d'application -->
+  <rect width="512" height="512" rx="115" fill="url(#deepNightFull)" />
+
+  <!-- Logo mis à l'échelle (x4.74) et centré -->
+  <g transform="translate(0, 0) scale(4.7407)" filter="url(#floatShadowFull)">
+    <g>
+      <rect x="32" y="32" width="44" height="44" rx="4" fill="none" stroke="url(#royalGoldFull)" stroke-width="3.5" />
+      <rect x="32" y="32" width="44" height="44" rx="4" fill="none" stroke="url(#royalGoldFull)" stroke-width="3.5" transform="rotate(45 54 54)" />
+    </g>
+    
+    <path d="M 54 41 L 67 54 L 54 67 L 41 54 Z" 
+          fill="url(#royalGoldFull)" 
+          stroke="url(#royalGoldFull)" 
+          stroke-width="2" 
+          stroke-linejoin="round" />
+  </g>
+</svg>

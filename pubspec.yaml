@@ -1,7 +1,7 @@
 name: quran_video_studio
-description: "Éditeur mobile de vidéos verticales (9:16) de récitation coranique : audio, texte arabe et traduction synchronisés, incrustés par FFmpeg."
+description: "NUQTA — éditeur mobile de vidéos verticales (9:16) de récitation coranique : audio, texte arabe et traduction synchronisés."
 publish_to: "none"
-version: 3.1.0+4
+version: 4.0.0+5
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -27,10 +27,12 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Les .ttf sont téléchargés par le workflow CI (licence SIL OFL),
-  # voir .github/workflows/build-apk.yml — étape "Download Arabic fonts".
+  # Les .ttf sont téléchargés par le workflow CI (licence SIL OFL) et le
+  # nuqta_logo.png est dérivé du SVG officiel par la CI,
+  # voir .github/workflows/build-apk.yml.
   assets:
     - assets/fonts/
+    - assets/branding/
 
   fonts:
     - family: Amiri

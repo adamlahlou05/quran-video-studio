@@ -23,6 +23,12 @@ class EditorState {
   /// Hashtags ajoutés à la description de partage (modifiables, persistés).
   final String hashtags;
 
+  /// Signature/filigrane affiché en haut de la vidéo (vide = désactivé).
+  final String signature;
+
+  /// Identifiants des récitateurs favoris, épinglés en tête de liste.
+  final List<String> favoriteReciters;
+
   /// Position verticale du bloc de texte : centre du bloc, en fraction de la
   /// hauteur de la frame (0 = haut, 1 = bas). Même valeur utilisée par le
   /// peintre partagé de l'aperçu et de l'export.
@@ -53,6 +59,8 @@ class EditorState {
     this.transition = TransitionMode.none,
     this.quality = ExportQuality.standard,
     this.hashtags = kDefaultHashtags,
+    this.signature = '',
+    this.favoriteReciters = const [],
     this.yFraction = 0.5,
     this.verses = const [],
     this.loadingVerses = false,
@@ -89,6 +97,8 @@ class EditorState {
     TransitionMode? transition,
     ExportQuality? quality,
     String? hashtags,
+    String? signature,
+    List<String>? favoriteReciters,
     double? yFraction,
     List<Verse>? verses,
     bool? loadingVerses,
@@ -112,6 +122,8 @@ class EditorState {
         transition: transition ?? this.transition,
         quality: quality ?? this.quality,
         hashtags: hashtags ?? this.hashtags,
+        signature: signature ?? this.signature,
+        favoriteReciters: favoriteReciters ?? this.favoriteReciters,
         yFraction: yFraction ?? this.yFraction,
         verses: verses ?? this.verses,
         loadingVerses: loadingVerses ?? this.loadingVerses,

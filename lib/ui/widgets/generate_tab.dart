@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/models/models.dart';
 import '../../core/services/export_naming.dart';
 import '../../providers/editor_controller.dart';
+import 'image_quote_sheet.dart';
 
 /// Onglet 4 — Génération : récapitulatif, bouton de rendu, barre de
 /// progression FFmpeg (avec temps restant estimé), annulation, confirmation
@@ -114,9 +115,9 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            'Album « Quran Video Studio » de ta galerie.',
-            style: const TextStyle(fontSize: 12, color: Colors.white60),
+          const Text(
+            'Album « NUQTA » de ta galerie.',
+            style: TextStyle(fontSize: 12, color: Colors.white60),
           ),
           // Description prête à coller sur TikTok/Instagram/YouTube : le
           // partage Android ne peut pas pré-remplir la légende côté réseau
@@ -270,6 +271,25 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
             onPressed: editor.readyToGenerate ? notifier.generate : null,
             icon: const Icon(Icons.movie_creation_outlined),
             label: const Text('Générer la vidéo'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: editor.verses.isEmpty ||
+                    editor.reciter == null ||
+                    chapter == null
+                ? null
+                : () => showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: const Color(0xFF161B1E),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(24)),
+                      ),
+                      builder: (_) => const ImageQuoteSheet(),
+                    ),
+            icon: const Icon(Icons.image_outlined, size: 18),
+            label: const Text('Image-citation (PNG)'),
           ),
           if (!editor.readyToGenerate)
             Padding(

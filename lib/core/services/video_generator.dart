@@ -110,6 +110,7 @@ class VideoGenerator {
     required TransitionMode transition,
     required ExportQuality quality,
     required double yFraction,
+    required String signature,
     required void Function(GenerationState) onState,
   }) async {
     final tmp = await getTemporaryDirectory();
@@ -131,6 +132,7 @@ class VideoGenerator {
       audios: audios,
       style: style,
       yFraction: yFraction,
+      signature: signature,
       outputDir: tmp.path,
       onProgress: (done, total) => onState(GenerationState(
         GenerationPhase.rendering,
@@ -252,7 +254,7 @@ class VideoGenerator {
       if (!await Gal.hasAccess(toAlbum: true)) {
         await Gal.requestAccess(toAlbum: true);
       }
-      await Gal.putVideo(outPath, album: 'Quran Video Studio');
+      await Gal.putVideo(outPath, album: 'NUQTA');
 
       onState(GenerationState(
         GenerationPhase.done,
