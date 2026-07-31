@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quran_video_studio/core/data/reciter_catalog.dart';
+import 'package:quran_video_studio/core/models/models.dart';
 
 void main() {
   group('kVerseCounts', () {
