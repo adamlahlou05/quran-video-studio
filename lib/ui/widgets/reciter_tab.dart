@@ -6,31 +6,24 @@ import '../../providers/editor_state.dart';
 
 /// Onglet 2 — Quick Switch des récitateurs : liste horizontale, le changement
 /// relance immédiatement la mise en cache audio de la plage sélectionnée.
+/// Le catalogue est statique et vérifié : disponible sans réseau, aucun
+/// récitateur affiché sans source audio réellement exploitable.
 class ReciterTab extends ConsumerWidget {
   const ReciterTab({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final reciters = ref.watch(recitersProvider);
+    final list = ref.watch(recitersProvider);
     final editor = ref.watch(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
 
-    return reciters.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: TextButton.icon(
-          onPressed: () => ref.invalidate(recitersProvider),
-          icon: const Icon(Icons.refresh),
-          label: const Text('Récitateurs indisponibles — réessayer'),
-        ),
-      ),
-      data: (list) => Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Text('Récitateur',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Text('Récitateur — ${list.length} disponibles',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
           SizedBox(
             height: 118,
@@ -67,11 +60,13 @@ class ReciterTab extends ConsumerWidget {
                           radius: 21,
                           backgroundColor: selected
                               ? scheme.primary
-                              : Colors.white24,
+                              : _avatarColor(reciter.id),
                           child: Text(
                             _initials(reciter.name),
                             style: const TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.bold),
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
                           ),
                         ),
                         const SizedBox(height: 7),
@@ -96,8 +91,14 @@ class ReciterTab extends ConsumerWidget {
             child: _AudioStatus(editor: editor, notifier: notifier),
           ),
         ],
-      ),
     );
+  }
+
+  /// Avatar de repli : couleur stable dérivée de l'identifiant du récitateur
+  /// (pas de dépendance à une API de photos fragile).
+  static Color _avatarColor(String id) {
+    final hue = (id.hashCode.abs() % 360).toDouble();
+    return HSLColor.fromAHSL(1, hue, 0.45, 0.32).toColor();
   }
 
   static String _initials(String name) {

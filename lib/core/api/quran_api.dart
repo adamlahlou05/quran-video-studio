@@ -1,30 +1,33 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
 import '../models/models.dart';
 
-/// Client de l'API publique quran.com (v4).
+/// Client de l'API publique quran.com (v4) — texte uniquement.
 ///
-/// - Métadonnées : sourates, récitateurs.
+/// - Métadonnées : sourates.
 /// - Contenu : texte uthmani + traduction, paginé par 50 versets.
-/// - Audio : un fichier mp3 par verset, servi par le CDN verses.quran.com.
+///
+/// L'audio ne passe plus par cette API : les récitateurs viennent du
+/// catalogue statique vérifié (core/data/reciter_catalog.dart).
 class QuranApi {
   static const String _base = 'https://api.quran.com/api/v4';
-  static const String _audioCdn = 'https://verses.quran.com/';
-
-  /// Récitateurs mis en avant dans l'UI, dans cet ordre.
-  /// 7 = Alafasy, 3 = As-Sudais, 2/1 = AbdulBaset, 4 = Ash-Shatri,
-  /// 6 = Al-Husary, 9 = Al-Minshawi, 10 = Ash-Shuraym, 5 = Ar-Rifai.
-  static const List<int> _featuredReciters = [7, 3, 2, 1, 4, 6, 9, 10, 5];
+  static const Duration _timeout = Duration(seconds: 15);
 
   final http.Client _client = http.Client();
 
   Future<Map<String, dynamic>> _getJson(String pathAndQuery) async {
-    final response = await _client.get(
-      Uri.parse('$_base$pathAndQuery'),
-      headers: const {'Accept': 'application/json'},
-    );
+    final http.Response response;
+    try {
+      response = await _client.get(
+        Uri.parse('$_base$pathAndQuery'),
+        headers: const {'Accept': 'application/json'},
+      ).timeout(_timeout);
+    } on TimeoutException {
+      throw Exception('serveur quran.com trop lent (délai dépassé)');
+    }
     if (response.statusCode != 200) {
       throw Exception('API quran.com : HTTP ${response.statusCode}');
     }
@@ -36,22 +39,6 @@ class QuranApi {
     return (data['chapters'] as List)
         .map((e) => Chapter.fromJson(e as Map<String, dynamic>))
         .toList();
-  }
-
-  Future<List<Reciter>> fetchReciters() async {
-    final data = await _getJson('/resources/recitations?language=en');
-    final all = (data['recitations'] as List)
-        .map((e) => Reciter.fromJson(e as Map<String, dynamic>))
-        .toList();
-    all.sort((a, b) {
-      final ia = _featuredReciters.indexOf(a.id);
-      final ib = _featuredReciters.indexOf(b.id);
-      if (ia != -1 && ib != -1) return ia.compareTo(ib);
-      if (ia != -1) return -1;
-      if (ib != -1) return 1;
-      return a.name.compareTo(b.name);
-    });
-    return all;
   }
 
   /// Tous les versets d'une sourate, avec traduction si [translationId] est
@@ -91,29 +78,6 @@ class QuranApi {
     }
     verses.sort((a, b) => a.number.compareTo(b.number));
     return verses;
-  }
-
-  /// URLs audio absolues, indexées par verse_key ("2:255" → https://…mp3).
-  Future<Map<String, String>> fetchAudioUrls({
-    required int reciterId,
-    required int chapterId,
-  }) async {
-    final urls = <String, String>{};
-    int? page = 1;
-    while (page != null) {
-      final data = await _getJson(
-        '/recitations/$reciterId/by_chapter/$chapterId?per_page=50&page=$page',
-      );
-      for (final raw in data['audio_files'] as List) {
-        final f = raw as Map<String, dynamic>;
-        final url = f['url'] as String? ?? '';
-        if (url.isEmpty) continue;
-        urls[f['verse_key'] as String] =
-            url.startsWith('http') ? url : '$_audioCdn$url';
-      }
-      page = (data['pagination'] as Map<String, dynamic>?)?['next_page'] as int?;
-    }
-    return urls;
   }
 
   static String _stripHtml(String input) =>

@@ -9,6 +9,9 @@ class EditorState {
   final Reciter? reciter;
   final StyleSettings style;
 
+  /// Couleur du fondu de fin de la vidéo générée (noir ou blanc).
+  final FadeColor fadeColor;
+
   /// Position verticale du bloc de texte : centre du bloc, en fraction de la
   /// hauteur du canvas (0 = haut, 1 = bas). Même valeur envoyée à l'ASS.
   final double yFraction;
@@ -34,6 +37,7 @@ class EditorState {
     this.ayahTo = 5,
     this.reciter,
     this.style = const StyleSettings(),
+    this.fadeColor = FadeColor.black,
     this.yFraction = 0.5,
     this.verses = const [],
     this.loadingVerses = false,
@@ -64,6 +68,7 @@ class EditorState {
     int? ayahTo,
     Reciter? reciter,
     StyleSettings? style,
+    FadeColor? fadeColor,
     double? yFraction,
     List<Verse>? verses,
     bool? loadingVerses,
@@ -83,6 +88,7 @@ class EditorState {
         ayahTo: ayahTo ?? this.ayahTo,
         reciter: reciter ?? this.reciter,
         style: style ?? this.style,
+        fadeColor: fadeColor ?? this.fadeColor,
         yFraction: yFraction ?? this.yFraction,
         verses: verses ?? this.verses,
         loadingVerses: loadingVerses ?? this.loadingVerses,

@@ -15,14 +15,50 @@ enum _RunResult { success, failed, cancelled }
 ///  1. concaténation des mp3 par verset (demuxer concat) ;
 ///  2. fond vidéo bouclé (-stream_loop -1), recadré en 1080×1920 ;
 ///  3. incrustation du texte via le filtre subtitles (libass + fontsdir) ;
-///  4. encodage H.264 + AAC, repli MPEG-4 si libx264 est absent de la build ;
-///  5. enregistrement du .mp4 dans la galerie (album "Quran Video Studio").
+///  4. fondu de fin (noir ou blanc) sur les derniers instants ;
+///  5. encodage H.264 + AAC, repli MPEG-4 si libx264 est absent de la build ;
+///  6. enregistrement du .mp4 dans la galerie (album "Quran Video Studio").
+///
+/// Durée : l'audio de la récitation est la source de vérité (-t = durée
+/// totale mesurée par FFprobe). -stream_loop -1 couvre automatiquement les
+/// deux cas : vidéo plus longue → coupée à la fin de la récitation ; vidéo
+/// plus courte → rebouclée autant de fois que nécessaire.
+///
+/// Audio : seul le flux 1 (récitation concaténée) est mappé ; la piste audio
+/// éventuelle de la vidéo importée n'entre jamais dans le fichier final.
 class VideoGenerator {
+  /// Filtre vidéo complet (échelle, recadrage, sous-titres, fondu).
+  /// Statique et pur : couvert par les tests unitaires.
+  static String buildFilter({
+    required String subtitlesPath,
+    required String fontsDir,
+    required int totalMs,
+    required FadeColor fadeColor,
+  }) {
+    final totalSec = totalMs / 1000.0;
+    // Fondu : 0,9 s en usage normal, réduit pour les récitations très
+    // courtes, désactivé sous 3 s pour ne pas manger tout le contenu.
+    final fadeDur = totalSec >= 8.0 ? 0.9 : (totalSec >= 3.0 ? 0.5 : 0.0);
+    final buffer = StringBuffer(
+      '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,'
+      'crop=1080:1920,setsar=1,fps=30,'
+      "subtitles=filename='$subtitlesPath':fontsdir='$fontsDir'",
+    );
+    if (fadeDur > 0) {
+      final fadeStart = totalSec - fadeDur;
+      buffer.write(',fade=t=out:st=${fadeStart.toStringAsFixed(3)}'
+          ':d=${fadeDur.toStringAsFixed(3)}:color=${fadeColor.ffmpegColor}');
+    }
+    buffer.write('[v]');
+    return buffer.toString();
+  }
+
   Future<void> generate({
     required String backgroundPath,
     required List<Verse> verses,
     required List<VerseAudio> audios,
     required StyleSettings style,
+    required FadeColor fadeColor,
     required double yFraction,
     required String fontsDir,
     required void Function(GenerationState) onState,
@@ -49,9 +85,12 @@ class VideoGenerator {
     ));
 
     final outPath = '${tmp.path}/quran_video_$stamp.mp4';
-    final filter = '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,'
-        'crop=1080:1920,setsar=1,fps=30,'
-        "subtitles=filename='${subsFile.path}':fontsdir='$fontsDir'[v]";
+    final filter = buildFilter(
+      subtitlesPath: subsFile.path,
+      fontsDir: fontsDir,
+      totalMs: totalMs,
+      fadeColor: fadeColor,
+    );
 
     List<String> buildArgs(String vcodec, List<String> vcodecOpts) => [
           '-y',

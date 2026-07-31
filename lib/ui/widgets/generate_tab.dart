@@ -104,6 +104,34 @@ class GenerateTab extends ConsumerWidget {
                     const TextStyle(fontSize: 12, color: Colors.redAccent),
               ),
             ),
+          // Fondu appliqué sur les derniers instants de la vidéo finale
+          // (la vidéo est coupée ou bouclée à la durée exacte de la
+          // récitation, puis fond vers cette couleur).
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Fondu de fin',
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final fade in FadeColor.values)
+                      ChoiceChip(
+                        label: Text(fade.label),
+                        selected: editor.fadeColor == fade,
+                        onSelected: (_) => notifier.setFadeColor(fade),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
           FilledButton.icon(
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(48),

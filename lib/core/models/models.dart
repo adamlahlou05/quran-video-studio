@@ -28,21 +28,25 @@ class Chapter {
       );
 }
 
-/// Un récitateur (endpoint /resources/recitations).
+/// Un récitateur du catalogue statique vérifié (reciter_catalog.dart).
+/// [everyayahFolder] : dossier sur everyayah.com (source primaire).
+/// [fallbackEdition]/[fallbackBitrate] : édition cdn.islamic.network (secours).
 class Reciter {
-  final int id;
+  final String id;
   final String name;
   final String style;
+  final String everyayahFolder;
+  final String? fallbackEdition;
+  final int fallbackBitrate;
 
-  const Reciter({required this.id, required this.name, required this.style});
-
-  factory Reciter.fromJson(Map<String, dynamic> json) => Reciter(
-        id: json['id'] as int,
-        name: json['reciter_name'] as String? ??
-            json['name'] as String? ??
-            'Récitateur',
-        style: json['style'] as String? ?? '',
-      );
+  const Reciter({
+    required this.id,
+    required this.name,
+    this.style = '',
+    required this.everyayahFolder,
+    this.fallbackEdition,
+    this.fallbackBitrate = 128,
+  });
 
   String get displayName => style.isEmpty ? name : '$name ($style)';
 }
@@ -128,6 +132,16 @@ class StyleSettings {
         font: font ?? this.font,
         sizeScale: sizeScale ?? this.sizeScale,
       );
+}
+
+/// Couleur du fondu appliqué sur les derniers instants de la vidéo finale.
+enum FadeColor {
+  black('Noir', 'black'),
+  white('Blanc', 'white');
+
+  final String label;
+  final String ffmpegColor;
+  const FadeColor(this.label, this.ffmpegColor);
 }
 
 /// Phase du pipeline de génération FFmpeg.

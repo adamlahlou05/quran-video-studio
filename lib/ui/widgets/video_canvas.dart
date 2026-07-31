@@ -32,13 +32,21 @@ class _VideoCanvasState extends ConsumerState<VideoCanvas> {
     if (mounted) setState(() {});
     await old?.dispose();
     if (path == null) return;
-    final controller = VideoPlayerController.file(File(path));
+    // mixWithOthers : sans cette option, l'ExoPlayer de video_player gère le
+    // focus audio Android et se met en PAUSE dès que just_audio démarre la
+    // récitation — c'était la cause du freeze de la vidéo pendant l'aperçu.
+    final controller = VideoPlayerController.file(
+      File(path),
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
     try {
       await controller.initialize();
     } catch (_) {
       await controller.dispose();
       return;
     }
+    // La vidéo importée est un fond silencieux : volume 0 garanti ici, et son
+    // flux audio n'est de toute façon jamais mappé dans le rendu FFmpeg.
     await controller.setLooping(true);
     await controller.setVolume(0);
     await controller.play();
@@ -46,6 +54,16 @@ class _VideoCanvasState extends ConsumerState<VideoCanvas> {
       await controller.dispose();
       return;
     }
+    // Filet de sécurité : si le système met malgré tout le player en pause
+    // (appel entrant, focus…), on relance la lecture dès que possible.
+    controller.addListener(() {
+      if (_video == controller &&
+          controller.value.isInitialized &&
+          !controller.value.isPlaying &&
+          !controller.value.isBuffering) {
+        controller.play();
+      }
+    });
     setState(() => _video = controller);
   }
 

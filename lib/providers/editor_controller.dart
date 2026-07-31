@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../core/api/quran_api.dart';
+import '../core/data/reciter_catalog.dart';
 import '../core/models/models.dart';
 import '../core/services/audio_service.dart';
 import '../core/services/font_service.dart';
@@ -18,9 +19,8 @@ final chaptersProvider = FutureProvider<List<Chapter>>(
   (ref) => ref.watch(quranApiProvider).fetchChapters(),
 );
 
-final recitersProvider = FutureProvider<List<Reciter>>(
-  (ref) => ref.watch(quranApiProvider).fetchReciters(),
-);
+/// Catalogue statique vérifié : disponible immédiatement, sans réseau.
+final recitersProvider = Provider<List<Reciter>>((ref) => kReciters);
 
 final editorProvider =
     NotifierProvider<EditorController, EditorState>(EditorController.new);
@@ -38,7 +38,6 @@ class EditorController extends Notifier<EditorState> {
   int _playToken = 0;
 
   final Map<String, List<Verse>> _verseCache = {};
-  final Map<String, Map<String, String>> _audioUrlCache = {};
 
   @override
   EditorState build() {
@@ -46,23 +45,18 @@ class EditorController extends Notifier<EditorState> {
       _rangeDebounce?.cancel();
       _player.dispose();
     });
-    // Sélections par défaut dès que les métadonnées arrivent :
-    // Al-Fatiha + Mishary Alafasy (id 7).
+    // Sélections par défaut : le récitateur vient du catalogue statique
+    // (Alafasy en tête) ; la sourate dès que l'API répond (Al-Fatiha).
+    Future.microtask(() {
+      if (state.reciter == null && kReciters.isNotEmpty) {
+        setReciter(kReciters.first);
+      }
+    });
     ref.listen(chaptersProvider, (previous, next) {
       next.whenData((chapters) {
         Future.microtask(() {
           if (state.chapter == null && chapters.isNotEmpty) {
             selectChapter(chapters.first);
-          }
-        });
-      });
-    });
-    ref.listen(recitersProvider, (previous, next) {
-      next.whenData((reciters) {
-        Future.microtask(() {
-          if (state.reciter == null && reciters.isNotEmpty) {
-            final featured = reciters.where((r) => r.id == 7);
-            setReciter(featured.isNotEmpty ? featured.first : reciters.first);
           }
         });
       });
@@ -157,6 +151,10 @@ class EditorController extends Notifier<EditorState> {
     _reloadVerses();
   }
 
+  void setFadeColor(FadeColor color) {
+    state = state.copyWith(fadeColor: color);
+  }
+
   // ─────────────────────────── Position (drag & drop) ───────────────────────
 
   void setYFraction(double fraction) {
@@ -190,7 +188,13 @@ class EditorController extends Notifier<EditorState> {
           );
       _verseCache[cacheKey] = all;
       if (token != _versesToken) return;
-      final slice = all.sublist(state.ayahFrom - 1, state.ayahTo);
+      if (all.isEmpty) {
+        throw Exception('aucun verset reçu');
+      }
+      // Bornes prudentes : l'API peut renvoyer moins de versets qu'annoncé.
+      final upper = state.ayahTo.clamp(1, all.length);
+      final lower = (state.ayahFrom - 1).clamp(0, upper - 1);
+      final slice = all.sublist(lower, upper);
       state = state.copyWith(
         verses: slice,
         loadingVerses: false,
@@ -218,15 +222,6 @@ class EditorController extends Notifier<EditorState> {
       audios: const [],
     );
     try {
-      final urlKey = '${reciter.id}|${chapter.id}';
-      var urls = _audioUrlCache[urlKey];
-      urls ??= await ref.read(quranApiProvider).fetchAudioUrls(
-            reciterId: reciter.id,
-            chapterId: chapter.id,
-          );
-      _audioUrlCache[urlKey] = urls;
-      if (token != _audioToken) return;
-
       final service = ref.read(audioServiceProvider);
       final from = state.ayahFrom;
       final to = state.ayahTo;
@@ -234,23 +229,13 @@ class EditorController extends Notifier<EditorState> {
       final result = <VerseAudio>[];
       for (var n = from; n <= to; n++) {
         final key = '${chapter.id}:$n';
-        final url = urls[key];
-        if (url == null) {
-          throw Exception('audio indisponible pour le verset $key '
-              'chez ce récitateur');
-        }
-        final path = await service.ensureVerseAudio(
+        final audio = await service.fetchVerseAudio(
           reciterId: reciter.id,
           verseKey: key,
-          url: url,
+          urls: audioUrlCandidates(reciter, chapter.id, n),
         );
-        final durationMs = await service.probeDurationMs(path);
         if (token != _audioToken) return;
-        result.add(VerseAudio(
-          verseKey: key,
-          localPath: path,
-          durationMs: durationMs,
-        ));
+        result.add(audio);
         state = state.copyWith(audioProgress: result.length / count);
       }
       if (token != _audioToken) return;
@@ -263,7 +248,8 @@ class EditorController extends Notifier<EditorState> {
       if (token != _audioToken) return;
       state = state.copyWith(
         loadingAudio: false,
-        audioError: 'Audio indisponible — $e',
+        audioError: 'Audio de ${reciter.name} indisponible — vérifie ta '
+            'connexion puis réessaie. Détail : $e',
       );
     }
   }
@@ -332,6 +318,7 @@ class EditorController extends Notifier<EditorState> {
         verses: s.verses,
         audios: s.audios,
         style: s.style,
+        fadeColor: s.fadeColor,
         yFraction: s.yFraction,
         fontsDir: fontsDir,
         onState: (g) => state = state.copyWith(generation: g),
