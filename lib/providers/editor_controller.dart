@@ -9,7 +9,9 @@ import '../core/api/quran_api.dart';
 import '../core/data/reciter_catalog.dart';
 import '../core/models/models.dart';
 import '../core/services/audio_service.dart';
+import '../core/services/export_naming.dart';
 import '../core/services/media_probe.dart';
+import '../core/services/settings_service.dart';
 import '../core/services/video_generator.dart';
 import 'editor_state.dart';
 
@@ -32,6 +34,7 @@ const List<double> kSnapFractions = [0.18, 0.5, 0.82];
 class EditorController extends Notifier<EditorState> {
   final AudioPlayer _player = AudioPlayer();
   final VideoGenerator _generator = VideoGenerator();
+  final SettingsService _settings = SettingsService();
 
   Timer? _rangeDebounce;
   int _versesToken = 0;
@@ -51,6 +54,11 @@ class EditorController extends Notifier<EditorState> {
     Future.microtask(() {
       if (state.reciter == null && kReciters.isNotEmpty) {
         setReciter(kReciters.first);
+      }
+    });
+    _settings.loadHashtags().then((tags) {
+      if (tags != state.hashtags) {
+        state = state.copyWith(hashtags: tags);
       }
     });
     ref.listen(chaptersProvider, (previous, next) {
@@ -113,6 +121,16 @@ class EditorController extends Notifier<EditorState> {
 
   void setTransition(TransitionMode mode) {
     state = state.copyWith(transition: mode);
+  }
+
+  /// Ajout direct d'un clip déjà sondé (import par lien).
+  void addClip(BackgroundClip clip) {
+    state = state.copyWith(clips: [...state.clips, clip]);
+  }
+
+  void setHashtags(String value) {
+    state = state.copyWith(hashtags: value);
+    unawaited(_settings.saveHashtags(value));
   }
 
   void setQuality(ExportQuality quality) {
@@ -363,7 +381,16 @@ class EditorController extends Notifier<EditorState> {
     }
     await stopPreview();
     try {
+      final number = await _settings.nextVideoNumber();
+      final fileName = buildVideoFileName(
+        number: number,
+        reciter: s.reciter!,
+        chapter: s.chapter!,
+        ayahFrom: s.ayahFrom,
+        ayahTo: s.ayahTo,
+      );
       await _generator.generate(
+        outputFileName: fileName,
         clips: s.clips,
         verses: s.verses,
         audios: s.audios,

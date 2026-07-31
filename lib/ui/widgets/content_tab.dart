@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/models.dart';
 import '../../providers/editor_controller.dart';
+import 'import_link_sheet.dart';
 
 /// Onglet 1 — Sourate et plage de versets.
 class ContentTab extends ConsumerWidget {
@@ -230,6 +231,21 @@ class _ClipsSection extends ConsumerWidget {
             const Expanded(
               child: Text("Vidéos d'arrière-plan",
                   style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Importer depuis un lien',
+              icon: const Icon(Icons.add_link, size: 20),
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: const Color(0xFF161B1E),
+                shape: const RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                builder: (_) => const ImportLinkSheet(),
+              ),
             ),
             TextButton.icon(
               onPressed: () async {

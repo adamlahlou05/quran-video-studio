@@ -37,8 +37,25 @@ Aucun environnement local n'est nécessaire : le dépôt est compilé par
    -t <durée récitation> -c:v libx264 (CRF 23 ou 19 selon la qualité choisie)
    -c:a aac` ;
 5. progression temps réel + estimation du temps restant, annulable ;
-6. sauvegarde dans l'album **Quran Video Studio** de la galerie, partage
-   direct possible.
+6. sauvegarde dans l'album **Quran Video Studio** de la galerie sous un nom
+   parlant `001_Recitateur_Sourate_v1-7.mp4` (numérotation persistée), avec
+   description de partage prête à coller (récitateur — sourate — versets +
+   hashtags configurables).
+
+### Partage et import
+
+- **Partage** : feuille de partage Android (TikTok/Instagram/YouTube y
+  figurent) + bouton « Copier la description ». La publication automatique
+  TikTok n'est volontairement pas implémentée : l'API officielle Content
+  Posting exige un compte développeur TikTok, OAuth et un audit de l'app
+  (sans audit : publications privées uniquement) — hors de portée d'un APK
+  hors store, et tout contournement serait fragile.
+- **Import par lien** (onglet Contenu → ⛓) : liens TikTok / YouTube /
+  Instagram **détectés et expliqués** (pas d'API officielle de téléchargement
+  de vidéos tierces — aucun scraping ni contournement) ; les **liens directs
+  vers un fichier vidéo** (contenus personnels, banques libres de droits)
+  sont téléchargés avec progression, validés par FFprobe, copiés dans la
+  galerie et ajoutés à la séquence de fonds.
 
 **Règles de durée** : l'audio de la récitation est la source de vérité.
 Vidéo plus longue → coupée à la fin de la récitation ; plus courte → bouclée

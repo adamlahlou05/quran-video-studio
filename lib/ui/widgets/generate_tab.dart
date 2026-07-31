@@ -1,21 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/models/models.dart';
+import '../../core/services/export_naming.dart';
 import '../../providers/editor_controller.dart';
 
 /// Onglet 4 — Génération : récapitulatif, bouton de rendu, barre de
-/// progression FFmpeg, annulation, et confirmation d'enregistrement galerie.
-class GenerateTab extends ConsumerWidget {
+/// progression FFmpeg (avec temps restant estimé), annulation, confirmation
+/// d'enregistrement, description de partage prête à coller et partage.
+class GenerateTab extends ConsumerStatefulWidget {
   const GenerateTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GenerateTab> createState() => _GenerateTabState();
+}
+
+class _GenerateTabState extends ConsumerState<GenerateTab> {
+  TextEditingController? _tagsController;
+  final FocusNode _tagsFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _tagsController?.dispose();
+    _tagsFocus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final editor = ref.watch(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
     final gen = editor.generation;
     final chapter = editor.chapter;
+
+    _tagsController ??= TextEditingController(text: editor.hashtags);
+    // Les hashtags persistés arrivent après le premier build : on synchronise
+    // le champ tant que l'utilisateur n'est pas en train d'y écrire.
+    ref.listen(editorProvider.select((s) => s.hashtags), (_, next) {
+      if (!_tagsFocus.hasFocus && _tagsController!.text != next) {
+        _tagsController!.text = next;
+      }
+    });
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -91,21 +118,70 @@ class GenerateTab extends ConsumerWidget {
             'Album « Quran Video Studio » de ta galerie.',
             style: const TextStyle(fontSize: 12, color: Colors.white60),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              TextButton.icon(
-                onPressed: notifier.resetGeneration,
-                icon: const Icon(Icons.replay),
-                label: const Text('Autre vidéo'),
+          // Description prête à coller sur TikTok/Instagram/YouTube : le
+          // partage Android ne peut pas pré-remplir la légende côté réseau
+          // social, le presse-papiers est le chemin fiable.
+          if (editor.reciter != null && chapter != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(width: 8),
+              child: Text(
+                buildShareDescription(
+                  reciter: editor.reciter!,
+                  chapter: chapter,
+                  ayahFrom: editor.ayahFrom,
+                  ayahTo: editor.ayahTo,
+                  hashtags: editor.hashtags,
+                ),
+                style: const TextStyle(fontSize: 11.5, color: Colors.white70),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
               FilledButton.tonalIcon(
                 onPressed: gen.outputPath == null
                     ? null
                     : () => Share.shareXFiles([XFile(gen.outputPath!)]),
                 icon: const Icon(Icons.share_outlined, size: 18),
                 label: const Text('Partager'),
+              ),
+              OutlinedButton.icon(
+                onPressed: editor.reciter == null || chapter == null
+                    ? null
+                    : () async {
+                        await Clipboard.setData(ClipboardData(
+                          text: buildShareDescription(
+                            reciter: editor.reciter!,
+                            chapter: chapter,
+                            ayahFrom: editor.ayahFrom,
+                            ayahTo: editor.ayahTo,
+                            hashtags: editor.hashtags,
+                          ),
+                        ));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Description copiée — colle-la '
+                                    'dans TikTok/Instagram/YouTube.')),
+                          );
+                        }
+                      },
+                icon: const Icon(Icons.copy, size: 16),
+                label: const Text('Copier la description'),
+              ),
+              TextButton.icon(
+                onPressed: notifier.resetGeneration,
+                icon: const Icon(Icons.replay),
+                label: const Text('Autre vidéo'),
               ),
             ],
           ),
@@ -148,7 +224,7 @@ class GenerateTab extends ConsumerWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
                 const Expanded(
@@ -170,6 +246,21 @@ class GenerateTab extends ConsumerWidget {
                   ],
                 ),
               ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: TextField(
+              controller: _tagsController,
+              focusNode: _tagsFocus,
+              onChanged: notifier.setHashtags,
+              style: const TextStyle(fontSize: 12),
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Hashtags de la description de partage',
+                labelStyle: TextStyle(fontSize: 12),
+                border: OutlineInputBorder(),
+              ),
             ),
           ),
           FilledButton.icon(

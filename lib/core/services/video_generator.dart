@@ -101,6 +101,7 @@ class VideoGenerator {
   // ─────────────────────────── Pipeline ───────────────────────────
 
   Future<void> generate({
+    required String outputFileName,
     required List<BackgroundClip> clips,
     required List<Verse> verses,
     required List<VerseAudio> audios,
@@ -193,7 +194,9 @@ class VideoGenerator {
       }
 
       // ───── Passe 2 : rendu final ─────
-      final outPath = '${tmp.path}/quran_video_$stamp.mp4';
+      // Le nom du fichier est conservé par Gal/MediaStore : c'est lui que
+      // l'utilisateur voit dans la galerie, Google Photos et le partage.
+      final outPath = '${tmp.path}/$outputFileName';
       final filter = buildFinalFilter(totalMs: totalMs, fadeColor: fadeColor);
       List<String> pass2Args(String vcodec, List<String> opts) => [
             '-y',
@@ -254,7 +257,7 @@ class VideoGenerator {
       onState(GenerationState(
         GenerationPhase.done,
         progress: 1,
-        message: 'Vidéo enregistrée dans la galerie.',
+        message: 'Enregistrée : $outputFileName',
         outputPath: outPath,
       ));
     } finally {

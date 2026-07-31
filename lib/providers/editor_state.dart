@@ -1,4 +1,5 @@
 import '../core/models/models.dart';
+import '../core/services/export_naming.dart';
 
 /// État immuable de l'éditeur single-screen. Toute l'UI en dérive.
 class EditorState {
@@ -18,6 +19,9 @@ class EditorState {
 
   /// Qualité d'encodage de l'export.
   final ExportQuality quality;
+
+  /// Hashtags ajoutés à la description de partage (modifiables, persistés).
+  final String hashtags;
 
   /// Position verticale du bloc de texte : centre du bloc, en fraction de la
   /// hauteur de la frame (0 = haut, 1 = bas). Même valeur utilisée par le
@@ -48,6 +52,7 @@ class EditorState {
     this.fadeColor = FadeColor.black,
     this.transition = TransitionMode.none,
     this.quality = ExportQuality.standard,
+    this.hashtags = kDefaultHashtags,
     this.yFraction = 0.5,
     this.verses = const [],
     this.loadingVerses = false,
@@ -83,6 +88,7 @@ class EditorState {
     FadeColor? fadeColor,
     TransitionMode? transition,
     ExportQuality? quality,
+    String? hashtags,
     double? yFraction,
     List<Verse>? verses,
     bool? loadingVerses,
@@ -105,6 +111,7 @@ class EditorState {
         fadeColor: fadeColor ?? this.fadeColor,
         transition: transition ?? this.transition,
         quality: quality ?? this.quality,
+        hashtags: hashtags ?? this.hashtags,
         yFraction: yFraction ?? this.yFraction,
         verses: verses ?? this.verses,
         loadingVerses: loadingVerses ?? this.loadingVerses,
