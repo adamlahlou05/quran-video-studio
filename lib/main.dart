@@ -24,7 +24,7 @@ class QuranVideoStudioApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF26A69A),
         scaffoldBackgroundColor: const Color(0xFF0E1113),
         sliderTheme: const SliderThemeData(
-          showValueIndicator: ShowValueIndicator.always,
+          showValueIndicator: ShowValueIndicator.onDrag,
         ),
       ),
       home: const EditorScreen(),
