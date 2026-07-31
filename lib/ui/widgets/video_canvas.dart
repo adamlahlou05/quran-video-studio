@@ -3,15 +3,15 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/models/models.dart';
 import '../../providers/editor_controller.dart';
 import 'overlay_block.dart';
 
-/// Aperçu 9:16 : vidéo de fond en boucle (muette), bloc de texte déplaçable
-/// verticalement (drag & drop avec aimantation Haut / Milieu / Bas), et
-/// commandes d'aperçu audio.
+/// Aperçu 9:16 : vidéos de fond enchaînées (muettes), bloc de texte
+/// déplaçable verticalement (drag & drop avec aimantation Haut/Milieu/Bas),
+/// et commandes d'aperçu audio.
 class VideoCanvas extends ConsumerStatefulWidget {
   const VideoCanvas({super.key});
 
@@ -22,18 +22,33 @@ class VideoCanvas extends ConsumerStatefulWidget {
 class _VideoCanvasState extends ConsumerState<VideoCanvas> {
   VideoPlayerController? _video;
   String? _videoPath;
+  int _clipIndex = 0;
+  bool _advancing = false;
   bool _dragging = false;
+  final ValueNotifier<Rect?> _blockRect = ValueNotifier(null);
 
-  Future<void> _syncVideo(String? path) async {
-    if (path == _videoPath) return;
+  Future<void> _syncVideo(String? path, {required bool loop}) async {
+    if (path == _videoPath) {
+      final video = _video;
+      if (video != null) {
+        await video.setLooping(loop);
+        // Même chemin ajouté deux fois dans la séquence : on relance.
+        if (video.value.isCompleted) {
+          await video.seekTo(Duration.zero);
+          await video.play();
+        }
+      }
+      return;
+    }
     _videoPath = path;
-    final old = _video;
-    _video = null;
-    if (mounted) setState(() {});
-    await old?.dispose();
-    if (path == null) return;
+    if (path == null) {
+      final old = _video;
+      if (mounted) setState(() => _video = null);
+      await old?.dispose();
+      return;
+    }
     // mixWithOthers : sans cette option, l'ExoPlayer de video_player gère le
-    // focus audio Android et se met en PAUSE dès que just_audio démarre la
+    // focus audio Android et se met en pause dès que just_audio démarre la
     // récitation — c'était la cause du freeze de la vidéo pendant l'aperçu.
     final controller = VideoPlayerController.file(
       File(path),
@@ -45,46 +60,72 @@ class _VideoCanvasState extends ConsumerState<VideoCanvas> {
       await controller.dispose();
       return;
     }
-    // La vidéo importée est un fond silencieux : volume 0 garanti ici, et son
-    // flux audio n'est de toute façon jamais mappé dans le rendu FFmpeg.
-    await controller.setLooping(true);
-    await controller.setVolume(0);
-    await controller.play();
     if (!mounted || _videoPath != path) {
       await controller.dispose();
       return;
     }
-    // Filet de sécurité : si le système met malgré tout le player en pause
-    // (appel entrant, focus…), on relance la lecture dès que possible.
-    controller.addListener(() {
-      if (_video == controller &&
-          controller.value.isInitialized &&
-          !controller.value.isPlaying &&
-          !controller.value.isBuffering) {
-        controller.play();
-      }
-    });
+    // Fond silencieux garanti (volume 0 ici, et le rendu FFmpeg ne mappe de
+    // toute façon jamais l'audio des vidéos importées).
+    await controller.setLooping(loop);
+    await controller.setVolume(0);
+    await controller.play();
+    controller.addListener(() => _onTick(controller));
+    final old = _video;
     setState(() => _video = controller);
+    await old?.dispose();
   }
 
-  Future<void> _pickVideo() async {
-    final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
-    if (picked != null) {
-      ref.read(editorProvider.notifier).setBackground(picked.path);
+  /// Rotation des clips en fin de lecture + filet anti-pause système.
+  void _onTick(VideoPlayerController controller) {
+    if (_video != controller || !mounted) return;
+    final value = controller.value;
+    if (!value.isInitialized || value.isBuffering) return;
+    final clips = ref.read(editorProvider).clips;
+    if (value.isCompleted && clips.length > 1) {
+      if (_advancing) return;
+      _advancing = true;
+      _clipIndex = (_clipIndex + 1) % clips.length;
+      _syncVideo(clips[_clipIndex].path, loop: false)
+          .whenComplete(() => _advancing = false);
+    } else if (!value.isPlaying && !value.isCompleted) {
+      controller.play();
+    }
+  }
+
+  void _onClipsChanged(List<BackgroundClip> clips) {
+    if (clips.isEmpty) {
+      _clipIndex = 0;
+      _syncVideo(null, loop: false);
+      return;
+    }
+    final currentIndex = clips.indexWhere((c) => c.path == _videoPath);
+    _clipIndex = currentIndex == -1 ? 0 : currentIndex;
+    _syncVideo(clips[_clipIndex].path, loop: clips.length <= 1);
+  }
+
+  Future<void> _pickVideos() async {
+    final rejected =
+        await ref.read(editorProvider.notifier).pickAndAddClips();
+    if (rejected > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text('$rejected fichier(s) ignoré(s) : pas des vidéos lisibles.'),
+      ));
     }
   }
 
   @override
   void dispose() {
     _video?.dispose();
+    _blockRect.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(
-      editorProvider.select((s) => s.backgroundPath),
-      (_, path) => _syncVideo(path),
+      editorProvider.select((s) => s.clips),
+      (_, clips) => _onClipsChanged(clips),
     );
     final editor = ref.watch(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
@@ -105,17 +146,19 @@ class _VideoCanvasState extends ConsumerState<VideoCanvas> {
               fit: StackFit.expand,
               children: [
                 if (video != null && video.value.isInitialized)
-                  FittedBox(
-                    fit: BoxFit.cover,
-                    clipBehavior: Clip.hardEdge,
-                    child: SizedBox(
-                      width: video.value.size.width,
-                      height: video.value.size.height,
-                      child: VideoPlayer(video),
+                  RepaintBoundary(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: video.value.size.width,
+                        height: video.value.size.height,
+                        child: VideoPlayer(video),
+                      ),
                     ),
                   )
                 else
-                  _Placeholder(onPick: _pickVideo),
+                  _Placeholder(onPick: _pickVideos),
 
                 // Guides d'aimantation pendant le drag.
                 if (_dragging)
@@ -127,32 +170,39 @@ class _VideoCanvasState extends ConsumerState<VideoCanvas> {
                       child: Container(height: 1, color: Colors.white38),
                     ),
 
-                // Bloc de texte : centre exactement à yFraction * hauteur,
-                // comme le \pos(540, y) du fichier ASS final.
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  top: editor.yFraction * canvasH,
-                  child: FractionalTranslation(
-                    translation: const Offset(0, -0.5),
-                    child: GestureDetector(
-                      onVerticalDragStart: (_) =>
-                          setState(() => _dragging = true),
-                      onVerticalDragUpdate: (details) => notifier.setYFraction(
-                          editor.yFraction + details.delta.dy / canvasH),
-                      onVerticalDragEnd: (_) {
+                // Texte incrusté : même peintre que l'export (WYSIWYG).
+                Positioned.fill(child: OverlayPreview(blockRect: _blockRect)),
+
+                // Drag & drop vertical du bloc (démarré sur le bloc lui-même).
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onVerticalDragStart: (details) {
+                      final rect = _blockRect.value;
+                      if (rect != null &&
+                          rect.inflate(12).contains(details.localPosition)) {
+                        setState(() => _dragging = true);
+                      }
+                    },
+                    onVerticalDragUpdate: (details) {
+                      if (_dragging) {
+                        notifier.setYFraction(
+                            editor.yFraction + details.delta.dy / canvasH);
+                      }
+                    },
+                    onVerticalDragEnd: (_) {
+                      if (_dragging) {
                         setState(() => _dragging = false);
                         notifier.snapY();
-                      },
-                      child: OverlayBlock(
-                        state: editor,
-                        canvasWidth: canvasW,
-                      ),
-                    ),
+                      }
+                    },
+                    onVerticalDragCancel: () {
+                      if (_dragging) setState(() => _dragging = false);
+                    },
                   ),
                 ),
 
-                // Rappel sourate / récitateur en haut du canvas.
+                // Rappel sourate / récitateur / fonds en haut du canvas.
                 Positioned(
                   left: 10,
                   top: 10,
@@ -168,17 +218,19 @@ class _VideoCanvasState extends ConsumerState<VideoCanvas> {
                             '${editor.ayahFrom}-${editor.ayahTo}'),
                       if (editor.reciter != null)
                         _Chip(editor.reciter!.name),
+                      if (editor.clips.length > 1)
+                        _Chip('${editor.clips.length} vidéos'),
                     ],
                   ),
                 ),
 
-                if (editor.backgroundPath != null)
+                if (editor.clips.isNotEmpty)
                   Positioned(
                     right: 6,
                     top: 6,
                     child: IconButton.filledTonal(
-                      tooltip: 'Changer la vidéo de fond',
-                      onPressed: _pickVideo,
+                      tooltip: 'Ajouter des vidéos de fond',
+                      onPressed: _pickVideos,
                       icon: const Icon(Icons.video_library_outlined, size: 20),
                     ),
                   ),
@@ -281,7 +333,7 @@ class _Placeholder extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 24),
             child: Text(
-              'Importe une vidéo verticale (9:16)\ndepuis ta galerie',
+              'Importe une ou plusieurs vidéos\nverticales (9:16) depuis ta galerie',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white70),
             ),
@@ -290,7 +342,7 @@ class _Placeholder extends StatelessWidget {
           FilledButton.icon(
             onPressed: onPick,
             icon: const Icon(Icons.add_photo_alternate_outlined),
-            label: const Text('Importer une vidéo'),
+            label: const Text('Importer des vidéos'),
           ),
         ],
       ),

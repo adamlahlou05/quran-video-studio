@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/models.dart';
+import 'media_probe.dart';
 
 /// Téléchargement et mise en cache des audios par verset, plus mesure de leur
 /// durée exacte via FFprobe (base de la synchronisation texte/audio).
@@ -90,13 +90,7 @@ class AudioService {
   }
 
   /// Durée d'un fichier audio en millisecondes, ou null s'il est illisible.
-  Future<int?> _tryProbeMs(String path) async {
-    final session = await FFprobeKit.getMediaInformation(path);
-    final duration =
-        double.tryParse(session.getMediaInformation()?.getDuration() ?? '');
-    if (duration == null || duration <= 0) return null;
-    return (duration * 1000).round();
-  }
+  Future<int?> _tryProbeMs(String path) => MediaProbe.durationMs(path);
 
   Future<void> _deleteQuietly(File file) async {
     try {

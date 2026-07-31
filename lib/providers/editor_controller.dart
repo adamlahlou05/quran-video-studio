@@ -2,13 +2,14 @@ import 'dart:async';
 import 'dart:ui' show Color;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../core/api/quran_api.dart';
 import '../core/data/reciter_catalog.dart';
 import '../core/models/models.dart';
 import '../core/services/audio_service.dart';
-import '../core/services/font_service.dart';
+import '../core/services/media_probe.dart';
 import '../core/services/video_generator.dart';
 import 'editor_state.dart';
 
@@ -64,11 +65,61 @@ class EditorController extends Notifier<EditorState> {
     return const EditorState();
   }
 
-  // ─────────────────────────── Contenu ───────────────────────────
+  // ──────────────────── Vidéos d'arrière-plan ────────────────────
 
-  void setBackground(String path) {
-    state = state.copyWith(backgroundPath: path);
+  /// Ouvre le sélecteur système (multi-sélection) et ajoute les vidéos
+  /// choisies à la séquence, dans l'ordre. Seul un sondage FFprobe est fait
+  /// (lecture des en-têtes) : aucune copie ni conversion supplémentaire.
+  /// Renvoie le nombre de fichiers rejetés (pas des vidéos lisibles).
+  Future<int> pickAndAddClips() async {
+    final picked = await ImagePicker().pickMultipleMedia();
+    if (picked.isEmpty) return 0;
+    var rejected = 0;
+    final added = <BackgroundClip>[];
+    for (final file in picked) {
+      final duration = await MediaProbe.durationMs(file.path);
+      if (duration == null) {
+        rejected++;
+      } else {
+        added.add(BackgroundClip(path: file.path, durationMs: duration));
+      }
+    }
+    if (added.isNotEmpty) {
+      state = state.copyWith(clips: [...state.clips, ...added]);
+    }
+    return rejected;
   }
+
+  void removeClip(int index) {
+    if (index < 0 || index >= state.clips.length) return;
+    final clips = [...state.clips]..removeAt(index);
+    state = state.copyWith(clips: clips);
+  }
+
+  /// Déplace un clip d'une position (delta = -1 vers le haut, +1 vers le bas).
+  void moveClip(int index, int delta) {
+    final target = index + delta;
+    if (index < 0 ||
+        index >= state.clips.length ||
+        target < 0 ||
+        target >= state.clips.length) {
+      return;
+    }
+    final clips = [...state.clips];
+    final clip = clips.removeAt(index);
+    clips.insert(target, clip);
+    state = state.copyWith(clips: clips);
+  }
+
+  void setTransition(TransitionMode mode) {
+    state = state.copyWith(transition: mode);
+  }
+
+  void setQuality(ExportQuality quality) {
+    state = state.copyWith(quality: quality);
+  }
+
+  // ─────────────────────────── Contenu ───────────────────────────
 
   void selectChapter(Chapter chapter) {
     stopPreview();
@@ -302,8 +353,8 @@ class EditorController extends Notifier<EditorState> {
   Future<void> generate() async {
     final s = state;
     if (s.generation.isBusy) return;
-    if (s.backgroundPath == null) {
-      _setGenerationError("Importe d'abord une vidéo d'arrière-plan.");
+    if (s.clips.isEmpty) {
+      _setGenerationError("Importe d'abord au moins une vidéo d'arrière-plan.");
       return;
     }
     if (!s.audioReady || s.loadingVerses) {
@@ -312,15 +363,15 @@ class EditorController extends Notifier<EditorState> {
     }
     await stopPreview();
     try {
-      final fontsDir = await FontService().ensureFontsDir();
       await _generator.generate(
-        backgroundPath: s.backgroundPath!,
+        clips: s.clips,
         verses: s.verses,
         audios: s.audios,
         style: s.style,
         fadeColor: s.fadeColor,
+        transition: s.transition,
+        quality: s.quality,
         yFraction: s.yFraction,
-        fontsDir: fontsDir,
         onState: (g) => state = state.copyWith(generation: g),
       );
     } catch (e) {

@@ -34,6 +34,7 @@ class Chapter {
 class Reciter {
   final String id;
   final String name;
+  final String arabicName;
   final String style;
   final String everyayahFolder;
   final String? fallbackEdition;
@@ -42,6 +43,7 @@ class Reciter {
   const Reciter({
     required this.id,
     required this.name,
+    this.arabicName = '',
     this.style = '',
     required this.everyayahFolder,
     this.fallbackEdition,
@@ -49,6 +51,35 @@ class Reciter {
   });
 
   String get displayName => style.isEmpty ? name : '$name ($style)';
+}
+
+/// Une vidéo d'arrière-plan sélectionnée, avec sa durée mesurée par FFprobe.
+class BackgroundClip {
+  final String path;
+  final int durationMs;
+
+  const BackgroundClip({required this.path, required this.durationMs});
+
+  String get fileName => path.split(RegExp(r'[\\/]')).last;
+}
+
+/// Transition entre les vidéos d'arrière-plan enchaînées.
+enum TransitionMode {
+  none('Aucune'),
+  fade('Fondu');
+
+  final String label;
+  const TransitionMode(this.label);
+}
+
+/// Qualité d'encodage de l'export (CRF x264 : plus bas = meilleure qualité).
+enum ExportQuality {
+  standard('Standard', 23),
+  high('Haute', 19);
+
+  final String label;
+  final int crf;
+  const ExportQuality(this.label, this.crf);
 }
 
 /// Un verset : texte uthmani + traduction (éventuellement vide).
@@ -90,16 +121,15 @@ enum TranslationLang {
   const TranslationLang(this.resourceId, this.label);
 }
 
-/// Police arabe : famille Flutter (pubspec) et nom de famille interne du .ttf
-/// (utilisé par libass dans le fichier ASS).
+/// Police arabe : famille Flutter (pubspec). Preview ET export passent par le
+/// même moteur texte Flutter, donc une seule famille suffit.
 enum ArabicFont {
-  amiri('Amiri', 'Amiri', 'Amiri'),
-  scheherazade('Scheherazade', 'ScheherazadeNew', 'Scheherazade New');
+  amiri('Amiri', 'Amiri'),
+  scheherazade('Scheherazade', 'ScheherazadeNew');
 
   final String label;
   final String flutterFamily;
-  final String assFamily;
-  const ArabicFont(this.label, this.flutterFamily, this.assFamily);
+  const ArabicFont(this.label, this.flutterFamily);
 }
 
 /// Réglages de style appliqués à l'incrustation (aperçu et rendu final).

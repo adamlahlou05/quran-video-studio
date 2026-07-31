@@ -122,6 +122,8 @@ class ContentTab extends ConsumerWidget {
                       fontSize: 12, color: Colors.greenAccent),
                 ),
             ],
+            const SizedBox(height: 14),
+            const _ClipsSection(),
           ],
         );
       },
@@ -204,6 +206,141 @@ class ContentTab extends ConsumerWidget {
         });
       },
     );
+  }
+}
+
+/// Séquence des vidéos d'arrière-plan : ordre de lecture modifiable (▲/▼),
+/// suppression, ajout, transition optionnelle entre les clips.
+class _ClipsSection extends ConsumerWidget {
+  const _ClipsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final clips = ref.watch(editorProvider.select((s) => s.clips));
+    final transition =
+        ref.watch(editorProvider.select((s) => s.transition));
+    final notifier = ref.read(editorProvider.notifier);
+    final scheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text("Vidéos d'arrière-plan",
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            TextButton.icon(
+              onPressed: () async {
+                final rejected = await notifier.pickAndAddClips();
+                if (rejected > 0 && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text('$rejected fichier(s) ignoré(s) : '
+                        'pas des vidéos lisibles.'),
+                  ));
+                }
+              },
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Ajouter'),
+            ),
+          ],
+        ),
+        if (clips.isEmpty)
+          const Text(
+            'Aucune vidéo importée. Elles seront lues dans l’ordre '
+            'ci-dessous, en boucle si la récitation est plus longue.',
+            style: TextStyle(fontSize: 12, color: Colors.white54),
+          ),
+        for (var i = 0; i < clips.length; i++)
+          Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 11,
+                  backgroundColor: scheme.primaryContainer,
+                  child: Text('${i + 1}',
+                      style: const TextStyle(fontSize: 11)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${clips[i].fileName} — ${_fmtMs(clips[i].durationMs)}',
+                    style: const TextStyle(fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 18,
+                  tooltip: 'Monter',
+                  onPressed: i == 0 ? null : () => notifier.moveClip(i, -1),
+                  icon: const Icon(Icons.arrow_upward),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 18,
+                  tooltip: 'Descendre',
+                  onPressed: i == clips.length - 1
+                      ? null
+                      : () => notifier.moveClip(i, 1),
+                  icon: const Icon(Icons.arrow_downward),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 18,
+                  tooltip: 'Retirer',
+                  onPressed: () => notifier.removeClip(i),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+        if (clips.length > 1) ...[
+          Row(
+            children: [
+              const Expanded(
+                child: Text('Transition entre les vidéos',
+                    style: TextStyle(fontSize: 12.5)),
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final mode in TransitionMode.values)
+                    ChoiceChip(
+                      label: Text(mode.label),
+                      selected: transition == mode,
+                      onSelected: (_) => notifier.setTransition(mode),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Durée totale : ${_fmtMs(clips.fold<int>(0, (s, c) => s + c.durationMs))}'
+              '${transition == TransitionMode.fade ? ' (fondu croisé 0,5 s)' : ''}',
+              style: const TextStyle(fontSize: 12, color: Colors.white54),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  static String _fmtMs(int ms) {
+    final totalSeconds = (ms / 1000).round();
+    final m = totalSeconds ~/ 60;
+    final s = totalSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
   }
 }
 

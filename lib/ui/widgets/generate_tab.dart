@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/models/models.dart';
 import '../../providers/editor_controller.dart';
@@ -47,9 +48,11 @@ class GenerateTab extends ConsumerWidget {
               ),
               _SummaryRow(
                 icon: Icons.video_file_outlined,
-                text: editor.backgroundPath == null
+                text: editor.clips.isEmpty
                     ? 'Aucune vidéo de fond importée'
-                    : 'Vidéo de fond prête (1080×1920, recadrage auto)',
+                    : '${editor.clips.length} vidéo(s) de fond, '
+                        '${_formatMs(editor.clipsTotalMs)} au total '
+                        '(1080×1920, recadrage auto)',
               ),
             ],
           ),
@@ -89,10 +92,22 @@ class GenerateTab extends ConsumerWidget {
             style: const TextStyle(fontSize: 12, color: Colors.white60),
           ),
           const SizedBox(height: 8),
-          TextButton.icon(
-            onPressed: notifier.resetGeneration,
-            icon: const Icon(Icons.replay),
-            label: const Text('Générer une autre vidéo'),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: notifier.resetGeneration,
+                icon: const Icon(Icons.replay),
+                label: const Text('Autre vidéo'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: gen.outputPath == null
+                    ? null
+                    : () => Share.shareXFiles([XFile(gen.outputPath!)]),
+                icon: const Icon(Icons.share_outlined, size: 18),
+                label: const Text('Partager'),
+              ),
+            ],
           ),
         ] else ...[
           if (gen.phase == GenerationPhase.error)
@@ -108,7 +123,7 @@ class GenerateTab extends ConsumerWidget {
           // (la vidéo est coupée ou bouclée à la durée exacte de la
           // récitation, puis fond vers cette couleur).
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
                 const Expanded(
@@ -132,6 +147,31 @@ class GenerateTab extends ConsumerWidget {
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Qualité d'export",
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final quality in ExportQuality.values)
+                      ChoiceChip(
+                        label: Text(quality.label),
+                        selected: editor.quality == quality,
+                        onSelected: (_) => notifier.setQuality(quality),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
           FilledButton.icon(
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
@@ -144,7 +184,7 @@ class GenerateTab extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                _missingHint(editor.backgroundPath == null,
+                _missingHint(editor.clips.isEmpty,
                     !editor.audioReady || editor.loadingVerses),
                 style: const TextStyle(fontSize: 12, color: Colors.white54),
               ),

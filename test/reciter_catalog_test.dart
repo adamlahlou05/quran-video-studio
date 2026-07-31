@@ -76,5 +76,49 @@ void main() {
         'https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/001001.mp3',
       ]);
     });
+
+    test('chaque récitateur a un nom arabe', () {
+      for (final r in kReciters) {
+        expect(r.arabicName, isNotEmpty, reason: r.id);
+      }
+    });
+  });
+
+  group('recherche des récitateurs', () {
+    Reciter byId(String id) => kReciters.firstWhere((r) => r.id == id);
+
+    test('latin partiel, insensible à la casse et aux accents', () {
+      expect(reciterMatches(byId('dossari'), 'Yas'), isTrue);
+      expect(reciterMatches(byId('sudais'), 'SUDAIS'), isTrue);
+      expect(reciterMatches(byId('ghamdi'), 'ghâmdi'), isTrue);
+      expect(reciterMatches(byId('alafasy'), 'alafasy'), isTrue);
+      expect(reciterMatches(byId('alafasy'), 'sudais'), isFalse);
+    });
+
+    test('tirets et espaces ignorés (« aldossari » → Al-Dossari)', () {
+      expect(reciterMatches(byId('dossari'), 'aldossari'), isTrue);
+      expect(reciterMatches(byId('shatri'), 'ash shatri'), isTrue);
+    });
+
+    test('arabe : sous-chaîne du nom, harakat ignorées', () {
+      expect(reciterMatches(byId('dossari'), 'ياسر'), isTrue);
+      expect(reciterMatches(byId('sudais'), 'السديس'), isTrue);
+      expect(reciterMatches(byId('sudais'), 'سديس'), isTrue);
+      expect(reciterMatches(byId('alafasy'), 'العفاسي'), isTrue);
+      expect(reciterMatches(byId('alafasy'), 'الدوسري'), isFalse);
+    });
+
+    test('requête vide : tout le monde correspond', () {
+      for (final r in kReciters) {
+        expect(reciterMatches(r, ''), isTrue);
+        expect(reciterMatches(r, '   '), isTrue);
+      }
+    });
+
+    test('normalisation : accents, alef, ta marbouta', () {
+      expect(normalizeSearchText('Récitâteur'), 'recitateur');
+      expect(normalizeSearchText('أحمد'), 'احمد');
+      expect(normalizeSearchText('سلامة'), 'سلامه');
+    });
   });
 }

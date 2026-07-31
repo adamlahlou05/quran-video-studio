@@ -1,87 +1,71 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/models.dart';
-import '../../core/services/subtitle_builder.dart';
-import '../../providers/editor_state.dart';
+import '../../core/render/overlay_painter.dart';
+import '../../providers/editor_controller.dart';
 
-/// Bloc de texte incrusté sur l'aperçu. Les tailles sont dérivées des mêmes
-/// constantes que le fichier ASS (échelle canvas/1080), pour que l'aperçu
-/// corresponde au rendu FFmpeg final.
-class OverlayBlock extends StatelessWidget {
-  final EditorState state;
-  final double canvasWidth;
+/// Aperçu du texte incrusté : dessine la frame 1080×1920 du
+/// [OverlayFramePainter] mise à l'échelle du canvas. C'est le MÊME code que
+/// celui qui rasterise les PNG de l'export — l'aperçu est donc fidèle au
+/// rendu final par construction (taille, position, couleur, retours à la
+/// ligne identiques).
+class OverlayPreview extends ConsumerWidget {
+  /// Rect du bloc dessiné, en coordonnées du canvas (pour le drag & drop).
+  final ValueNotifier<Rect?> blockRect;
 
-  const OverlayBlock({
-    super.key,
-    required this.state,
-    required this.canvasWidth,
-  });
+  const OverlayPreview({super.key, required this.blockRect});
 
   @override
-  Widget build(BuildContext context) {
-    final scale = canvasWidth / SubtitleBuilder.playResX;
-    final style = state.style;
-    final hasBox = style.boxOpacity > 0.01;
-    final verse = state.verses.isEmpty
-        ? null
-        : state.verses[state.previewIndex.clamp(0, state.verses.length - 1)];
-    final shadows = hasBox
-        ? null
-        : const [Shadow(blurRadius: 6, color: Colors.black87)];
+  Widget build(BuildContext context, WidgetRef ref) {
+    final verses = ref.watch(editorProvider.select((s) => s.verses));
+    final index = ref.watch(editorProvider.select((s) => s.previewIndex));
+    final style = ref.watch(editorProvider.select((s) => s.style));
+    final yFraction = ref.watch(editorProvider.select((s) => s.yFraction));
+    final verse =
+        verses.isEmpty ? null : verses[index.clamp(0, verses.length - 1)];
 
-    return Center(
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: 18 * scale + 6,
-          vertical: 10 * scale + 4,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: style.boxOpacity),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: verse == null
-            ? const Text(
-                'Choisis une sourate et des versets…',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
-              )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    verse.arabic,
-                    textAlign: TextAlign.center,
-                    textDirection: TextDirection.rtl,
-                    style: TextStyle(
-                      fontFamily: style.font.flutterFamily,
-                      fontSize: SubtitleBuilder.arabicBaseSize *
-                          style.sizeScale *
-                          scale,
-                      height: 1.8,
-                      color: style.textColor,
-                      shadows: shadows,
-                    ),
-                  ),
-                  if (style.translation != TranslationLang.none &&
-                      verse.translation.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        verse.translation,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: style.font.flutterFamily,
-                          fontSize: SubtitleBuilder.transBaseSize *
-                              style.sizeScale *
-                              scale,
-                          height: 1.35,
-                          color: style.textColor.withValues(alpha: 0.95),
-                          shadows: shadows,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+    return RepaintBoundary(
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: _OverlayPreviewPainter(verse, style, yFraction, blockRect),
       ),
     );
   }
+}
+
+class _OverlayPreviewPainter extends CustomPainter {
+  final Verse? verse;
+  final StyleSettings style;
+  final double yFraction;
+  final ValueNotifier<Rect?> blockRect;
+
+  _OverlayPreviewPainter(this.verse, this.style, this.yFraction,
+      this.blockRect);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final scale = size.width / OverlayFramePainter.frameW;
+    canvas.save();
+    canvas.scale(scale);
+    final rect = OverlayFramePainter.paint(
+      canvas,
+      verse: verse,
+      style: style,
+      yFraction: yFraction,
+    );
+    canvas.restore();
+    blockRect.value = Rect.fromLTWH(
+      rect.left * scale,
+      rect.top * scale,
+      rect.width * scale,
+      rect.height * scale,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_OverlayPreviewPainter oldDelegate) =>
+      oldDelegate.verse != verse ||
+      oldDelegate.style != style ||
+      oldDelegate.yFraction != yFraction;
 }
