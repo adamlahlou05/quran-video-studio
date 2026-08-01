@@ -122,8 +122,12 @@ CommandResult parseCommand(
       _containScore(norm, normNoSpace, r.name) * 3,
       _containScore(norm, normNoSpace, r.arabicName) * 3,
     );
-    for (final word
-        in normalizeSearchText(r.name).split(' ').where((w) => w.length >= 4)) {
+    // Mots significatifs des noms latin ET arabe (« السديس » seul suffit).
+    final nameWords = {
+      ...normalizeSearchText(r.name).split(' '),
+      ...normalizeSearchText(r.arabicName).split(' '),
+    }.where((w) => w.length >= 4);
+    for (final word in nameWords) {
       for (final iw in inputWords) {
         if (iw == word || iw.contains(word) || word.contains(iw)) {
           score += word.length * 2;
