@@ -80,6 +80,19 @@ class SettingsService {
     await _save();
   }
 
+  /// Code de langue de l'interface ('fr' | 'en' | 'ar'), null si jamais
+  /// choisie (déclenche le dialogue de premier lancement).
+  Future<String?> loadLanguage() async {
+    final data = await _load();
+    return data['language'] as String?;
+  }
+
+  Future<void> saveLanguage(String code) async {
+    final data = await _load();
+    data['language'] = code;
+    await _save();
+  }
+
   Future<List<String>> loadFavoriteReciters() async {
     final data = await _load();
     final raw = data['favoriteReciters'];

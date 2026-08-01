@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/models.dart';
 import 'media_probe.dart';
+import 'silence_trim.dart';
 
 /// Téléchargement et mise en cache des audios par verset, plus mesure de leur
 /// durée exacte via FFprobe (base de la synchronisation texte/audio).
@@ -21,8 +23,13 @@ class AudioService {
 
   final http.Client _client = http.Client();
 
-  /// Renvoie l'audio d'un verset (téléchargé si absent du cache) avec sa durée
-  /// mesurée. Cache : <app_support>/audio/<reciterId>/<sourate_verset>.mp3
+  /// Bornes de rognage déjà calculées, par chemin de fichier (l'analyse
+  /// silencedetect n'est faite qu'une fois par fichier et par session).
+  static final Map<String, (int, int)> _trimCache = {};
+
+  /// Renvoie l'audio d'un verset (téléchargé si absent du cache) avec sa
+  /// durée mesurée et ses bornes de rognage des silences de bord.
+  /// Cache : <app_support>/audio/<reciterId>/<sourate_verset>.mp3
   Future<VerseAudio> fetchVerseAudio({
     required String reciterId,
     required String verseKey,
@@ -38,11 +45,7 @@ class AudioService {
     if (await file.exists() && await file.length() >= _minValidBytes) {
       final duration = await _tryProbeMs(file.path);
       if (duration != null) {
-        return VerseAudio(
-          verseKey: verseKey,
-          localPath: file.path,
-          durationMs: duration,
-        );
+        return _withTrims(verseKey, file.path, duration);
       }
       await _deleteQuietly(file); // cache corrompu : on retélécharge
     }
@@ -56,11 +59,7 @@ class AudioService {
           if (duration == null) {
             throw Exception('fichier audio illisible');
           }
-          return VerseAudio(
-            verseKey: verseKey,
-            localPath: file.path,
-            durationMs: duration,
-          );
+          return _withTrims(verseKey, file.path, duration);
         } catch (e) {
           lastError = e;
           await _deleteQuietly(file);
@@ -68,6 +67,35 @@ class AudioService {
       }
     }
     throw Exception('téléchargement impossible ($lastError)');
+  }
+
+  /// Analyse les silences de bord (une seule fois par fichier) et construit
+  /// le VerseAudio. En cas d'échec de l'analyse : aucun rognage (prudence).
+  Future<VerseAudio> _withTrims(
+      String verseKey, String path, int fileDurationMs) async {
+    var trims = _trimCache[path];
+    if (trims == null) {
+      try {
+        final session = await FFmpegKit.executeWithArguments([
+          '-hide_banner', '-nostats',
+          '-i', path,
+          '-af', SilenceTrim.filterSpec,
+          '-f', 'null', '-',
+        ]);
+        final log = await session.getOutput() ?? '';
+        trims = SilenceTrim.parse(log, fileDurationMs);
+      } catch (_) {
+        trims = (0, fileDurationMs);
+      }
+      _trimCache[path] = trims;
+    }
+    return VerseAudio(
+      verseKey: verseKey,
+      localPath: path,
+      fileDurationMs: fileDurationMs,
+      inMs: trims.$1,
+      outMs: trims.$2,
+    );
   }
 
   Future<void> _download(String url, File target) async {

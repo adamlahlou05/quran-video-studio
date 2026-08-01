@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/data/reciter_catalog.dart';
+import '../../core/i18n/strings.dart';
 import '../../providers/editor_controller.dart';
 import '../../providers/editor_state.dart';
 
-/// Onglet 2 — Quick Switch des récitateurs : recherche (latin ou arabe,
-/// tolérante aux accents et aux harakat), liste horizontale, le changement
-/// relance immédiatement la mise en cache audio de la plage sélectionnée.
-/// Le catalogue est statique et vérifié : aucun récitateur affiché sans
-/// source audio réellement exploitable.
+/// Onglet 2 — Récitateurs en GRILLE verticale responsive (2-4 colonnes selon
+/// la largeur), recherche tolérante (latin/arabe), favoris épinglés en tête.
+/// Le catalogue est statique et vérifié : aucun récitateur sans source audio.
 class ReciterTab extends ConsumerStatefulWidget {
   const ReciterTab({super.key});
 
@@ -25,12 +24,13 @@ class _ReciterTabState extends ConsumerState<ReciterTab> {
     final all = ref.watch(recitersProvider);
     final editor = ref.watch(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
+    final s = ref.watch(sProvider);
     final favorites = editor.favoriteReciters;
-    // Favoris épinglés en tête (dans l'ordre du catalogue), puis les autres.
     final filtered = [
       for (final reciter in all)
         if (reciterMatches(reciter, _query)) reciter,
     ];
+    // Favoris épinglés en tête (dans l'ordre du catalogue), puis les autres.
     final list = [
       for (final r in filtered)
         if (favorites.contains(r.id)) r,
@@ -51,8 +51,7 @@ class _ReciterTabState extends ConsumerState<ReciterTab> {
               decoration: InputDecoration(
                 isDense: true,
                 prefixIcon: const Icon(Icons.search, size: 18),
-                hintText:
-                    'Rechercher parmi ${all.length} récitateurs (ex. Yasser, سديس)…',
+                hintText: s.searchReciters(all.length),
                 hintStyle: const TextStyle(fontSize: 12),
                 contentPadding: EdgeInsets.zero,
                 border: OutlineInputBorder(
@@ -62,117 +61,125 @@ class _ReciterTabState extends ConsumerState<ReciterTab> {
             ),
           ),
         ),
-        SizedBox(
-          height: 118,
+        Expanded(
           child: list.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
-                    'Aucun récitateur ne correspond à cette recherche.',
-                    style: TextStyle(fontSize: 12, color: Colors.white54),
+                    s.noReciterMatch,
+                    style: const TextStyle(
+                        fontSize: 12, color: Colors.white54),
                   ),
                 )
-              : ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: list.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final reciter = list[index];
-                    final selected = editor.reciter?.id == reciter.id;
-                    final isFavorite = favorites.contains(reciter.id);
-                    final scheme = Theme.of(context).colorScheme;
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () => notifier.setReciter(reciter),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        width: 118,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? scheme.primaryContainer
-                              : Colors.white.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
+              : LayoutBuilder(builder: (context, constraints) {
+                  final columns =
+                      (constraints.maxWidth / 118).floor().clamp(2, 4);
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    gridDelegate:
+                        SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 0.92,
+                    ),
+                    itemCount: list.length,
+                    itemBuilder: (context, index) {
+                      final reciter = list[index];
+                      final selected = editor.reciter?.id == reciter.id;
+                      final isFavorite = favorites.contains(reciter.id);
+                      final scheme = Theme.of(context).colorScheme;
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => notifier.setReciter(reciter),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
                             color: selected
-                                ? scheme.primary
-                                : Colors.transparent,
-                            width: 2,
+                                ? scheme.primaryContainer
+                                : Colors.white.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: selected
+                                  ? scheme.primary
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
                           ),
-                        ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          clipBehavior: Clip.none,
-                          children: [
-                            Positioned(
-                              top: -6,
-                              right: -6,
-                              child: InkWell(
-                                customBorder: const CircleBorder(),
-                                onTap: () => notifier
-                                    .toggleFavoriteReciter(reciter.id),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4),
-                                  child: Icon(
-                                    isFavorite
-                                        ? Icons.star_rounded
-                                        : Icons.star_outline_rounded,
-                                    size: 18,
-                                    color: isFavorite
-                                        ? Colors.amber
-                                        : Colors.white38,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned(
+                                top: -4,
+                                right: -4,
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: () => notifier
+                                      .toggleFavoriteReciter(reciter.id),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: Icon(
+                                      isFavorite
+                                          ? Icons.star_rounded
+                                          : Icons.star_outline_rounded,
+                                      size: 18,
+                                      color: isFavorite
+                                          ? Colors.amber
+                                          : Colors.white38,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            Column(
-                          children: [
-                            CircleAvatar(
-                              radius: 19,
-                              backgroundColor: selected
-                                  ? scheme.primary
-                                  : _avatarColor(reciter.id),
-                              child: Text(
-                                _initials(reciter.name),
-                                style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white),
+                              Column(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 17,
+                                    backgroundColor: selected
+                                        ? scheme.primary
+                                        : _avatarColor(reciter.id),
+                                    child: Text(
+                                      _initials(reciter.name),
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Expanded(
+                                    child: Text(
+                                      reciter.displayName,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 10.5),
+                                    ),
+                                  ),
+                                  Text(
+                                    reciter.arabicName,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontFamily: 'Amiri',
+                                      fontSize: 11,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 5),
-                            Expanded(
-                              child: Text(
-                                reciter.displayName,
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                            ),
-                            Text(
-                              reciter.arabicName,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontFamily: 'Amiri',
-                                fontSize: 12,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                      );
+                    },
+                  );
+                }),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          child: _AudioStatus(editor: editor, notifier: notifier),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+          child: _AudioStatus(editor: editor, notifier: notifier, s: s),
         ),
       ],
     );
@@ -197,7 +204,9 @@ class _ReciterTabState extends ConsumerState<ReciterTab> {
 class _AudioStatus extends StatelessWidget {
   final EditorState editor;
   final EditorController notifier;
-  const _AudioStatus({required this.editor, required this.notifier});
+  final S s;
+  const _AudioStatus(
+      {required this.editor, required this.notifier, required this.s});
 
   @override
   Widget build(BuildContext context) {
@@ -209,7 +218,7 @@ class _AudioStatus extends StatelessWidget {
               value: editor.audioProgress == 0 ? null : editor.audioProgress),
           const SizedBox(height: 6),
           Text(
-            'Mise en cache audio… ${(editor.audioProgress * 100).round()} %',
+            s.audioCaching((editor.audioProgress * 100).round()),
             style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),
         ],
@@ -228,28 +237,28 @@ class _AudioStatus extends StatelessWidget {
           ),
           TextButton(
             onPressed: notifier.reloadAudio,
-            child: const Text('Réessayer'),
+            child: Text(s.retry),
           ),
         ],
       );
     }
     if (editor.audioReady) {
-      return const Row(
+      return Row(
         children: [
-          Icon(Icons.check_circle, size: 16, color: Colors.greenAccent),
-          SizedBox(width: 6),
+          const Icon(Icons.check_circle, size: 16, color: Colors.greenAccent),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
-              "Audio en cache — prêt pour l'aperçu et la génération",
-              style: TextStyle(fontSize: 12, color: Colors.white70),
+              s.audioReadyMsg,
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
           ),
         ],
       );
     }
-    return const Text(
-      'Sélectionne un récitateur pour précharger l’audio.',
-      style: TextStyle(fontSize: 12, color: Colors.white54),
+    return Text(
+      s.selectReciterHint,
+      style: const TextStyle(fontSize: 12, color: Colors.white54),
     );
   }
 }

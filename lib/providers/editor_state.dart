@@ -1,10 +1,15 @@
+import 'dart:ui' show Color;
+
 import '../core/models/models.dart';
 import '../core/services/export_naming.dart';
 
 /// État immuable de l'éditeur single-screen. Toute l'UI en dérive.
 class EditorState {
-  /// Vidéos d'arrière-plan, dans l'ordre de lecture choisi par l'utilisateur.
+  /// Fonds (vidéos/images), dans l'ordre de lecture choisi par l'utilisateur.
   final List<BackgroundClip> clips;
+
+  /// Fond uni utilisé quand [clips] est vide (couleur prédéfinie ou libre).
+  final Color? solidColor;
   final Chapter? chapter;
   final int ayahFrom;
   final int ayahTo;
@@ -46,10 +51,17 @@ class EditorState {
   final int previewIndex;
   final bool isPlaying;
 
+  /// Position courante de la timeline de preview (ms, 0..totalDurationMs).
+  final int previewPositionMs;
+
+  /// Incrémenté à chaque seek explicite : le canvas réaligne le fond dessus.
+  final int previewSeekSeq;
+
   final GenerationState generation;
 
   const EditorState({
     this.clips = const [],
+    this.solidColor,
     this.chapter,
     this.ayahFrom = 1,
     this.ayahTo = 5,
@@ -71,6 +83,8 @@ class EditorState {
     this.audioError,
     this.previewIndex = 0,
     this.isPlaying = false,
+    this.previewPositionMs = 0,
+    this.previewSeekSeq = 0,
     this.generation = const GenerationState.idle(),
   });
 
@@ -88,6 +102,7 @@ class EditorState {
 
   EditorState copyWith({
     List<BackgroundClip>? clips,
+    Color? solidColor,
     Chapter? chapter,
     int? ayahFrom,
     int? ayahTo,
@@ -109,10 +124,13 @@ class EditorState {
     Object? audioError = _sentinel,
     int? previewIndex,
     bool? isPlaying,
+    int? previewPositionMs,
+    int? previewSeekSeq,
     GenerationState? generation,
   }) =>
       EditorState(
         clips: clips ?? this.clips,
+        solidColor: solidColor ?? this.solidColor,
         chapter: chapter ?? this.chapter,
         ayahFrom: ayahFrom ?? this.ayahFrom,
         ayahTo: ayahTo ?? this.ayahTo,
@@ -137,6 +155,8 @@ class EditorState {
             audioError == _sentinel ? this.audioError : audioError as String?,
         previewIndex: previewIndex ?? this.previewIndex,
         isPlaying: isPlaying ?? this.isPlaying,
+        previewPositionMs: previewPositionMs ?? this.previewPositionMs,
+        previewSeekSeq: previewSeekSeq ?? this.previewSeekSeq,
         generation: generation ?? this.generation,
       );
 

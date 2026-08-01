@@ -3,14 +3,15 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/i18n/strings.dart';
 import '../../core/models/models.dart';
 import '../../core/services/export_naming.dart';
 import '../../providers/editor_controller.dart';
 import 'image_quote_sheet.dart';
 
-/// Onglet 4 — Génération : récapitulatif, bouton de rendu, barre de
-/// progression FFmpeg (avec temps restant estimé), annulation, confirmation
-/// d'enregistrement, description de partage prête à coller et partage.
+/// Onglet 4 — Génération : récapitulatif, rendu avec progression et temps
+/// restant, annulation, description de partage prête à coller, partage,
+/// et export d'images-citations (une ou toute la plage).
 class GenerateTab extends ConsumerStatefulWidget {
   const GenerateTab({super.key});
 
@@ -33,17 +34,23 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
   Widget build(BuildContext context) {
     final editor = ref.watch(editorProvider);
     final notifier = ref.read(editorProvider.notifier);
+    final s = ref.watch(sProvider);
     final gen = editor.generation;
     final chapter = editor.chapter;
 
     _tagsController ??= TextEditingController(text: editor.hashtags);
-    // Les hashtags persistés arrivent après le premier build : on synchronise
-    // le champ tant que l'utilisateur n'est pas en train d'y écrire.
-    ref.listen(editorProvider.select((s) => s.hashtags), (_, next) {
+    ref.listen(editorProvider.select((st) => st.hashtags), (_, next) {
       if (!_tagsFocus.hasFocus && _tagsController!.text != next) {
         _tagsController!.text = next;
       }
     });
+
+    final backgroundSummary = editor.clips.isNotEmpty
+        ? s.clipsSummary(
+            editor.clips.length, _formatMs(editor.clipsTotalMs))
+        : editor.solidColor != null
+            ? s.solidSummary
+            : s.noBackground;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -60,27 +67,23 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
               _SummaryRow(
                 icon: Icons.menu_book_outlined,
                 text: chapter == null
-                    ? 'Aucune sourate sélectionnée'
-                    : 'Sourate ${chapter.nameSimple}, versets '
-                        '${editor.ayahFrom} à ${editor.ayahTo}',
+                    ? s.noChapterSelected
+                    : s.chapterSummary(
+                        chapter.nameSimple, editor.ayahFrom, editor.ayahTo),
               ),
               _SummaryRow(
                 icon: Icons.record_voice_over_outlined,
-                text: editor.reciter?.displayName ?? 'Aucun récitateur',
+                text: editor.reciter?.displayName ?? s.noReciter,
               ),
               _SummaryRow(
                 icon: Icons.timer_outlined,
                 text: editor.audioReady
-                    ? 'Durée estimée : ${_formatMs(editor.totalDurationMs)}'
-                    : 'Durée estimée : — (audio en préparation)',
+                    ? s.durationEstimated(_formatMs(editor.totalDurationMs))
+                    : s.durationPending,
               ),
               _SummaryRow(
                 icon: Icons.video_file_outlined,
-                text: editor.clips.isEmpty
-                    ? 'Aucune vidéo de fond importée'
-                    : '${editor.clips.length} vidéo(s) de fond, '
-                        '${_formatMs(editor.clipsTotalMs)} au total '
-                        '(1080×1920, recadrage auto)',
+                text: backgroundSummary,
               ),
             ],
           ),
@@ -99,7 +102,7 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
           OutlinedButton.icon(
             onPressed: notifier.cancelGeneration,
             icon: const Icon(Icons.close),
-            label: const Text('Annuler'),
+            label: Text(s.cancel),
           ),
         ] else if (gen.phase == GenerationPhase.done) ...[
           Row(
@@ -115,13 +118,10 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
             ],
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Album « NUQTA » de ta galerie.',
-            style: TextStyle(fontSize: 12, color: Colors.white60),
+          Text(
+            s.doneAlbum,
+            style: const TextStyle(fontSize: 12, color: Colors.white60),
           ),
-          // Description prête à coller sur TikTok/Instagram/YouTube : le
-          // partage Android ne peut pas pré-remplir la légende côté réseau
-          // social, le presse-papiers est le chemin fiable.
           if (editor.reciter != null && chapter != null) ...[
             const SizedBox(height: 10),
             Container(
@@ -153,7 +153,7 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
                     ? null
                     : () => Share.shareXFiles([XFile(gen.outputPath!)]),
                 icon: const Icon(Icons.share_outlined, size: 18),
-                label: const Text('Partager'),
+                label: Text(s.share),
               ),
               OutlinedButton.icon(
                 onPressed: editor.reciter == null || chapter == null
@@ -170,19 +170,16 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
                         ));
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Description copiée — colle-la '
-                                    'dans TikTok/Instagram/YouTube.')),
-                          );
+                              SnackBar(content: Text(s.copied)));
                         }
                       },
                 icon: const Icon(Icons.copy, size: 16),
-                label: const Text('Copier la description'),
+                label: Text(s.copyDesc),
               ),
               TextButton.icon(
                 onPressed: notifier.resetGeneration,
                 icon: const Icon(Icons.replay),
-                label: const Text('Autre vidéo'),
+                label: Text(s.otherVideo),
               ),
             ],
           ),
@@ -196,17 +193,14 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
                     const TextStyle(fontSize: 12, color: Colors.redAccent),
               ),
             ),
-          // Fondu appliqué sur les derniers instants de la vidéo finale
-          // (la vidéo est coupée ou bouclée à la durée exacte de la
-          // récitation, puis fond vers cette couleur).
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Fondu de fin',
-                    style: TextStyle(
+                    s.fadeLabel,
+                    style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -215,7 +209,7 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
                   children: [
                     for (final fade in FadeColor.values)
                       ChoiceChip(
-                        label: Text(fade.label),
+                        label: Text(s.fadeColorLabel(fade)),
                         selected: editor.fadeColor == fade,
                         onSelected: (_) => notifier.setFadeColor(fade),
                       ),
@@ -228,10 +222,10 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
             padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    "Qualité d'export",
-                    style: TextStyle(
+                    s.qualityLabel,
+                    style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -240,7 +234,7 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
                   children: [
                     for (final quality in ExportQuality.values)
                       ChoiceChip(
-                        label: Text(quality.label),
+                        label: Text(s.qualityName(quality)),
                         selected: editor.quality == quality,
                         onSelected: (_) => notifier.setQuality(quality),
                       ),
@@ -256,11 +250,11 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
               focusNode: _tagsFocus,
               onChanged: notifier.setHashtags,
               style: const TextStyle(fontSize: 12),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
-                labelText: 'Hashtags de la description de partage',
-                labelStyle: TextStyle(fontSize: 12),
-                border: OutlineInputBorder(),
+                labelText: s.hashtagsLabel,
+                labelStyle: const TextStyle(fontSize: 12),
+                border: const OutlineInputBorder(),
               ),
             ),
           ),
@@ -270,7 +264,7 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
             ),
             onPressed: editor.readyToGenerate ? notifier.generate : null,
             icon: const Icon(Icons.movie_creation_outlined),
-            label: const Text('Générer la vidéo'),
+            label: Text(s.generateBtn),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
@@ -289,28 +283,22 @@ class _GenerateTabState extends ConsumerState<GenerateTab> {
                       builder: (_) => const ImageQuoteSheet(),
                     ),
             icon: const Icon(Icons.image_outlined, size: 18),
-            label: const Text('Image-citation (PNG)'),
+            label: Text(s.quoteBtn),
           ),
           if (!editor.readyToGenerate)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                _missingHint(editor.clips.isEmpty,
-                    !editor.audioReady || editor.loadingVerses),
+                s.missingBefore(
+                  editor.clips.isEmpty && editor.solidColor == null,
+                  !editor.audioReady || editor.loadingVerses,
+                ),
                 style: const TextStyle(fontSize: 12, color: Colors.white54),
               ),
             ),
         ],
       ],
     );
-  }
-
-  static String _missingHint(bool missingVideo, bool missingContent) {
-    final parts = <String>[
-      if (missingVideo) 'importer une vidéo de fond (canvas en haut)',
-      if (missingContent) 'attendre la fin du chargement versets/audio',
-    ];
-    return 'Avant de générer : ${parts.join(' · ')}.';
   }
 
   static String _formatMs(int ms) {

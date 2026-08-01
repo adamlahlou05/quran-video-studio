@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/i18n/strings.dart';
 import '../../core/models/models.dart';
 import '../../providers/editor_controller.dart';
 
@@ -35,13 +36,14 @@ class _StyleTabState extends ConsumerState<StyleTab> {
 
   @override
   Widget build(BuildContext context) {
-    final style = ref.watch(editorProvider.select((s) => s.style));
-    final signature = ref.watch(editorProvider.select((s) => s.signature));
+    final style = ref.watch(editorProvider.select((st) => st.style));
+    final signature = ref.watch(editorProvider.select((st) => st.signature));
     final notifier = ref.read(editorProvider.notifier);
+    final s = ref.watch(sProvider);
     final scheme = Theme.of(context).colorScheme;
 
     _signatureController ??= TextEditingController(text: signature);
-    ref.listen(editorProvider.select((s) => s.signature), (_, next) {
+    ref.listen(editorProvider.select((st) => st.signature), (_, next) {
       if (!_signatureFocus.hasFocus && _signatureController!.text != next) {
         _signatureController!.text = next;
       }
@@ -50,7 +52,7 @@ class _StyleTabState extends ConsumerState<StyleTab> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       children: [
-        const _SectionLabel('Couleur du texte'),
+        _SectionLabel(s.textColorLabel),
         Row(
           children: [
             for (final color in _colors)
@@ -85,7 +87,7 @@ class _StyleTabState extends ConsumerState<StyleTab> {
               ),
           ],
         ),
-        const _SectionLabel('Opacité du fond derrière le texte'),
+        _SectionLabel(s.boxOpacityLabel),
         Slider(
           value: style.boxOpacity,
           min: 0,
@@ -94,26 +96,26 @@ class _StyleTabState extends ConsumerState<StyleTab> {
           label: '${(style.boxOpacity * 100).round()} %',
           onChanged: notifier.setBoxOpacity,
         ),
-        const _SectionLabel('Langue de la traduction'),
+        _SectionLabel(s.translationLabel),
         Wrap(
           spacing: 8,
           children: [
             for (final lang in TranslationLang.values)
               ChoiceChip(
-                label: Text(lang.label),
+                label: Text(s.translationName(lang)),
                 selected: style.translation == lang,
                 onSelected: (_) => notifier.setTranslation(lang),
               ),
           ],
         ),
-        const _SectionLabel("Police d'écriture arabe"),
+        _SectionLabel(s.fontLabelTitle),
         Wrap(
           spacing: 8,
           children: [
             for (final font in ArabicFont.values)
               ChoiceChip(
                 label: Text(
-                  font.label,
+                  s.fontLabel(font),
                   style: TextStyle(fontFamily: font.flutterFamily),
                 ),
                 selected: style.font == font,
@@ -121,7 +123,7 @@ class _StyleTabState extends ConsumerState<StyleTab> {
               ),
           ],
         ),
-        const _SectionLabel('Taille du texte'),
+        _SectionLabel(s.sizeLabel),
         Slider(
           value: style.sizeScale,
           min: 0.7,
@@ -130,17 +132,17 @@ class _StyleTabState extends ConsumerState<StyleTab> {
           label: '×${style.sizeScale.toStringAsFixed(1)}',
           onChanged: notifier.setSizeScale,
         ),
-        const _SectionLabel('Signature (filigrane en haut de la vidéo)'),
+        _SectionLabel(s.signatureLabel),
         TextField(
           controller: _signatureController,
           focusNode: _signatureFocus,
           onChanged: notifier.setSignature,
           style: const TextStyle(fontSize: 13),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             isDense: true,
-            hintText: '@toncompte (laisser vide pour désactiver)',
-            hintStyle: TextStyle(fontSize: 12),
-            border: OutlineInputBorder(),
+            hintText: s.signatureHint,
+            hintStyle: const TextStyle(fontSize: 12),
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 8),

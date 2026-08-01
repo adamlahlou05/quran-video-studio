@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/i18n/strings.dart';
 import 'content_tab.dart';
 import 'generate_tab.dart';
 import 'reciter_tab.dart';
@@ -7,11 +9,12 @@ import 'style_tab.dart';
 
 /// Panneau de contrôle inférieur : 4 onglets, tout se règle à la volée sans
 /// jamais quitter l'écran (les onglets sont des vues internes, pas des pages).
-class ControlPanel extends StatelessWidget {
+class ControlPanel extends ConsumerWidget {
   const ControlPanel({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(sProvider);
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF161B1E),
@@ -34,19 +37,25 @@ class ControlPanel extends StatelessWidget {
             TabBar(
               dividerColor: Colors.transparent,
               labelStyle: const TextStyle(fontSize: 11),
-              tabs: const [
-                Tab(icon: Icon(Icons.menu_book_outlined, size: 20),
-                    text: 'Contenu'),
-                Tab(icon: Icon(Icons.record_voice_over_outlined, size: 20),
-                    text: 'Récitateur'),
-                Tab(icon: Icon(Icons.palette_outlined, size: 20),
-                    text: 'Style'),
-                Tab(icon: Icon(Icons.movie_creation_outlined, size: 20),
-                    text: 'Générer'),
+              tabs: [
+                Tab(
+                    icon: const Icon(Icons.menu_book_outlined, size: 20),
+                    text: s.tabContent),
+                Tab(
+                    icon: const Icon(Icons.record_voice_over_outlined,
+                        size: 20),
+                    text: s.tabReciter),
+                Tab(
+                    icon: const Icon(Icons.palette_outlined, size: 20),
+                    text: s.tabStyle),
+                Tab(
+                    icon: const Icon(Icons.movie_creation_outlined,
+                        size: 20),
+                    text: s.tabGenerate),
               ],
             ),
             const SizedBox(
-              height: 250,
+              height: 300,
               child: TabBarView(
                 children: [
                   ContentTab(),

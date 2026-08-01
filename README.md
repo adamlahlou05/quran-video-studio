@@ -46,6 +46,26 @@ Aucun environnement local n'est nécessaire : le dépôt est compilé par
    description de partage prête à coller (récitateur — sourate — versets +
    hashtags configurables).
 
+### v5 — interaction, fonds et langues
+
+- **Timeline interactive** : playlist audio unifiée (ClippingAudioSource par
+  verset), slider avec seek — audio, verset affiché et fond suivent la même
+  position que dans l'export.
+- **Continuité audio** : silences de bord détectés (`silencedetect`) et
+  rognés via inpoint/outpoint — mêmes bornes en preview et à l'export, aucune
+  coupe dans la récitation (garde-fous conservateurs, plafonds 0,5/0,8 s).
+- **Fonds** : vidéos et/ou **images** (durées réparties automatiquement,
+  fondu croisé 0,25-0,5 s, limite intelligente), ou **couleur unie** libre
+  (sélecteur HSV intégré, source lavfi `color` à l'export).
+- **Commande IA** (onglet Contenu) : coller « Mishary Alafasy — Al-Baqarah —
+  42-60 » prépare la sélection (parseur local tolérant, alternatives si
+  ambiguïté).
+- **Langues** : FR / EN / AR avec RTL réel, choix au premier lancement,
+  modifiable dans ⚙ Réglages, persisté.
+- **Images-citations** : fond dégradé, couleur libre ou **image** de la
+  galerie ; génération **en lot** (toute la plage) avec progression et
+  annulation. Récitateurs en **grille verticale** avec recherche.
+
 ### Partage et exports
 
 - **Partage** : feuille de partage Android (TikTok/Instagram/YouTube y

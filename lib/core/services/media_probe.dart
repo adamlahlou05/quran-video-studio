@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 
 /// Sondage FFprobe local : durée réelle d'un média, sans copie ni conversion.
@@ -13,5 +16,18 @@ class MediaProbe {
         double.tryParse(session.getMediaInformation()?.getDuration() ?? '');
     if (duration == null || duration <= 0) return null;
     return (duration * 1000).round();
+  }
+
+  /// Vrai si le fichier est une image décodable par Flutter (jpg, png, webp…).
+  /// Décodage minuscule (8 px) : validation sans coût mémoire.
+  static Future<bool> isImage(String path) async {
+    try {
+      final bytes = await File(path).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes, targetWidth: 8);
+      codec.dispose();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }

@@ -53,12 +53,19 @@ class Reciter {
   String get displayName => style.isEmpty ? name : '$name ($style)';
 }
 
-/// Une vidéo d'arrière-plan sélectionnée, avec sa durée mesurée par FFprobe.
+/// Un fond sélectionné : vidéo (durée mesurée par FFprobe) ou image fixe
+/// (durée calculée à la génération : la récitation est répartie entre les
+/// images, avec un minimum par image).
 class BackgroundClip {
   final String path;
   final int durationMs;
+  final bool isImage;
 
-  const BackgroundClip({required this.path, required this.durationMs});
+  const BackgroundClip({
+    required this.path,
+    required this.durationMs,
+    this.isImage = false,
+  });
 
   String get fileName => path.split(RegExp(r'[\\/]')).last;
 }
@@ -97,17 +104,28 @@ class Verse {
   });
 }
 
-/// Un audio de verset téléchargé localement, avec sa durée mesurée par FFprobe.
+/// Un audio de verset téléchargé localement. [inMs]/[outMs] délimitent la
+/// partie réellement jouée : les silences de bord détectés par FFmpeg sont
+/// rognés (continuité entre versets) sans jamais toucher à la récitation.
+/// La preview (ClippingAudioSource) et l'export (inpoint/outpoint du concat)
+/// utilisent les MÊMES bornes → synchronisation identique des deux côtés.
 class VerseAudio {
   final String verseKey;
   final String localPath;
-  final int durationMs;
+  final int fileDurationMs;
+  final int inMs;
+  final int outMs;
 
   const VerseAudio({
     required this.verseKey,
     required this.localPath,
-    required this.durationMs,
+    required this.fileDurationMs,
+    required this.inMs,
+    required this.outMs,
   });
+
+  /// Durée effective (utilisée pour les timings texte et la durée totale).
+  int get durationMs => outMs - inMs;
 }
 
 /// Langue de traduction — resourceId = identifiant de la ressource quran.com.
