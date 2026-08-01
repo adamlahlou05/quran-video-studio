@@ -437,7 +437,8 @@ class _VideoCanvasState extends ConsumerState<VideoCanvas> {
     final total = editor.totalDurationMs;
     final position =
         (_dragValueMs ?? editor.previewPositionMs.toDouble())
-            .clamp(0.0, max(total.toDouble(), 1.0));
+            .clamp(0.0, max(total.toDouble(), 1.0))
+            .toDouble();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: BoxDecoration(
